@@ -1,5 +1,5 @@
 # Introduction 
-DBPlus is a interface layer between the several python database interface and your ptogram
+DBPlus is a interface layer between the several python database interface and your program
 
 # Install
 Clone the repository and issue "pip install ."
