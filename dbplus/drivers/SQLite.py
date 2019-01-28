@@ -1,25 +1,3 @@
-#!/usr/bin/env python
-#
-# Copyright (c) 2016 Alexander Lokhman <alex.lokhman@gmail.com>
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-
 from __future__ import absolute_import, division, print_function, with_statement
 
 import sqlite3
@@ -52,8 +30,11 @@ class SQLiteDriver(BaseDriver):
         return self._params["database"]
 
     @staticmethod
-    def _row_factory(cursor, row):
-        return tuple((cursor.description[i][0], value) for i, value in enumerate(row))
+    def _row_factory(cursor, row): #behold rows as dictionairies :-)
+        d = {}
+        for idx, col in enumerate(cursor.description):
+            d[col[0]] = row[idx]
+        return d    
 
     def connect(self):
         self.close()
@@ -70,9 +51,10 @@ class SQLiteDriver(BaseDriver):
             self._conn = None
 
     def clear(self):
-        if self._cursor is not None:
-            self._cursor.close()
-            self._cursor = None
+        # if self._cursor is not None:
+        #     self._cursor.close()
+        #     self._cursor = None
+        pass
 
     def error_code(self):
         return 1 if self._error else 0
@@ -85,18 +67,17 @@ class SQLiteDriver(BaseDriver):
             #self._log(sql, *params)
             print(sql,params)
             self._error = None
-            self._cursor = self._conn.execute(sql, params)
+            Statement._cursor = self._conn.execute(sql, params)
             return self.row_count()
         except Exception as ex:
-            if isinstance(ex, sqlite3.OperationalError):
-                self._error = ex.message
-            raise ex
+            self._error = str(ex)
+            raise RuntimeError("Error executing SQL: {}, with parameters: {} : {}".format(sql, params,ex))
 
-    def iterate(self):
-        if self._cursor is None:
+    def iterate(self, Statement):
+        if Statement._cursor is None:
             raise StopIteration
 
-        for row in self._cursor:
+        for row in Statement._cursor:
             yield row
 
         self.clear()
@@ -108,14 +89,14 @@ class SQLiteDriver(BaseDriver):
         return getattr(self._cursor, "lastrowid", None)
 
     def begin_transaction(self):
-        self.execute_and_clear("BEGIN TRANSACTION")
+        self._conn.execute("BEGIN TRANSACTION")
 
     def commit(self):
-        self._log("COMMIT")
+        #self._log("COMMIT")
         self._conn.commit()
 
     def rollback(self):
-        self._log("ROLLBACK")
+        #self._log("ROLLBACK")
         self._conn.rollback()
 
     @staticmethod
@@ -127,3 +108,7 @@ class SQLiteDriver(BaseDriver):
 
     def get_name(self):
         return "sqlite"
+
+    def callproc(self, procname, *params):
+        pass
+        
