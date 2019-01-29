@@ -1,11 +1,10 @@
 from __future__ import absolute_import, division, print_function, with_statement
-import mysql.connector
-from mysql.connector import errorcode
+import cx_Oracle
+import logging
 from dbplus.drivers import BaseDriver
+from dbplus.helpers import _debug
 
-class MySQLDriver(BaseDriver):
-    _cursor = None
-    _con = None
+class OracleDriver(BaseDriver):
 
     def __init__(self, timeout=0, charset="utf8", timezone="SYSTEM",  **params):
         #self._params = dict(charset=charset, time_zone = timezone, connect_timeout=timeout, autocommit=True)
@@ -17,53 +16,51 @@ class MySQLDriver(BaseDriver):
         self._params["host"] = params.pop('host')
         self._params["port"] = int(params.pop('port'))
 
-    def _get_server_version_info(self):
-        return getattr(self._conn, "_server_version", None)
-
-    def get_database(self):
-        if "database" in self._params:
-            return self._params["db"]
-        self.execute("SELECT DATABASE()")
-        return next(self.iterate())[0][1]
 
     def connect(self):
         #self.close()
         try:
-            self._conn = mysql.connector.connect(**self._params)
+            dsn = cx_Oracle.makedsn(self._params["host"],self._params["port"],sid=self._params["database"])
+            #print("---->",dsn)
+            self._conn = cx_Oracle.connect(user=self._params["user"],password=self._params["password"],dsn=dsn)
             self._cursor = self._conn.cursor()
-        except mysql.connector.Error as err:
-            if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
-                print("Something is wrong with your user name or password")
-            elif err.errno == errorcode.ER_BAD_DB_ERROR:
-                print("Database does not exist")
-            else:
-                print(err)
-            raise err    
+            #print("----> We ARE IN!")
+        except Exception as ex:
+            print("BUMMER")    
+            raise ex
+    
 
     def close(self):
-        self.clear()
         if self._conn is not None:
             self._conn.close()
             self._conn = None
-
-    def clear(self):
-        if self._cursor is not None:
-            self._cursor.close()
-            self._cursor = None
+    
 
     def error_code(self):
-        return self._conn.errno()
+        pass
+
 
     def error_info(self):
-        return self._conn.error()
+        pass
+
+
+    def callproc(self, procname, *params):
+        try:
+            result = cx_Oracle.callproc(self._conn, procname, tuple(*params))
+            return list(result[1:])
+        except Exception as ex:
+            self._error = cx_Oracle.stmt_errormsg()
+            raise RuntimeError("Error calling stored proc: {}, with parameters: {} : {}".format(procname, params,ex))
+
 
     def execute(self, Statement, sql, *params):
         try:
             Statement._cursor = self._conn.cursor()
             return Statement._cursor.execute(sql, params)
-        except mysql.connector.Error as err:
-            print(err)
-            raise err
+        except Exception as ex:
+            self._error = cx_Oracle.stmt_errormsg()
+            raise RuntimeError("Error executing SQL: {}, with parameters: {} : {}".format(sql, params,ex))
+
 
     def iterate(self, Statement):
         if Statement._cursor is None:
@@ -85,34 +82,42 @@ class MySQLDriver(BaseDriver):
             row = tuple([el.decode('utf-8') if type(el) is bytearray else el for el in row])
             return dict(zip(columns, row))
 
-    def row_count(self):
-        return self._conn.affected_rows()
+
+    def clear(self,Statement):
+        if Statement._cursor is not None:
+            pass
+            #cx_Oracle.free_result(Statement._cursor)
+            #Statement._cursor = None
+
+
+    def next_result(self,cursor):
+        return cx_Oracle.next_result(cursor)
+
 
     def last_insert_id(self, seq_name=None):
-        return self._conn.insert_id() or None
+        pass
+
 
     def begin_transaction(self):
-        self._cursor.execute("START TRANSACTION")
+        self._logger.debug(">>> START TRX")
+        cx_Oracle.autocommit(self._conn, cx_Oracle.SQL_AUTOCOMMIT_OFF)
+
 
     def commit(self):
-        self._conn.commit()
+        self._logger.debug("<<< COMMIT")
+        cx_Oracle.commit(self._conn)
+        cx_Oracle.autocommit(self._conn, cx_Oracle.SQL_AUTOCOMMIT_ON)
+
 
     def rollback(self):
-        self._conn.rollback()
+        self._logger.debug(">>> ROLLBACK")
+        cx_Oracle.rollback(self._conn)
+        cx_Oracle.autocommit(self._conn, cx_Oracle.SQL_AUTOCOMMIT_ON)
 
-    def escape_string(self, value):
-        return self._conn.literal(value)
-
-    def get_name(self):
-        return "mysql"
-
-    def callproc(self, procname, *params):
-        try:
-            result = self._cursor.callproc(procname,tuple(*params))
-            return list(result)
-        except mysql.connector.Error as err:
-            print(err)
-            raise err
 
     def get_placeholder(self):
-        return "%s"
+        return "?"
+
+
+    def get_name(self):
+        return self._driver

@@ -35,6 +35,12 @@ class Database(object):
         elif driver == 'SQLITE':
             from dbplus.drivers import SQLite 
             self._driver = SQLite.SQLiteDriver(**dbParameters) # and of to the races with SQLite!            
+        elif driver == 'ORACLE':
+            from dbplus.drivers import Oracle 
+            self._driver = Oracle.OracleDriver(**dbParameters) # and of to the races with Oracle!   
+        elif driver == 'POSTGRES':
+            from dbplus.drivers import Postgres 
+            self._driver = Postgres.PostgresDriver(**dbParameters) # and of to the races with Oracle!                      
         else: # add new drivers here
             raise ValueError('DBPlus does not have a driver for: {}'.format(driver))
         self._logger.info("--> Using Database driver: {}".format(driver))

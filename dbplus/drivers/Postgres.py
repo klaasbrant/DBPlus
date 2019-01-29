@@ -1,9 +1,8 @@
 from __future__ import absolute_import, division, print_function, with_statement
-import mysql.connector
-from mysql.connector import errorcode
+import psycopg2
 from dbplus.drivers import BaseDriver
 
-class MySQLDriver(BaseDriver):
+class PostgresDriver(BaseDriver):
     _cursor = None
     _con = None
 
@@ -29,16 +28,13 @@ class MySQLDriver(BaseDriver):
     def connect(self):
         #self.close()
         try:
-            self._conn = mysql.connector.connect(**self._params)
+            print("================>",self._params)
+            self._conn = psycopg2.connect(**self._params)
             self._cursor = self._conn.cursor()
-        except mysql.connector.Error as err:
-            if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
-                print("Something is wrong with your user name or password")
-            elif err.errno == errorcode.ER_BAD_DB_ERROR:
-                print("Database does not exist")
-            else:
-                print(err)
-            raise err    
+            print("----> We ARE IN!")
+        except Exception as ex:
+            print("BUMMER")    
+            raise ex 
 
     def close(self):
         self.clear()
@@ -60,8 +56,9 @@ class MySQLDriver(BaseDriver):
     def execute(self, Statement, sql, *params):
         try:
             Statement._cursor = self._conn.cursor()
-            return Statement._cursor.execute(sql, params)
-        except mysql.connector.Error as err:
+            Statement._cursor.execute(sql, params)
+            return 0
+        except Exception as err:
             print(err)
             raise err
 
@@ -110,7 +107,7 @@ class MySQLDriver(BaseDriver):
         try:
             result = self._cursor.callproc(procname,tuple(*params))
             return list(result)
-        except mysql.connector.Error as err:
+        except psycopg2.Error as err:
             print(err)
             raise err
 
