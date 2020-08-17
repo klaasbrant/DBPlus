@@ -11,7 +11,7 @@ class Statement:
 
     def __init__(self, database):
         self._connection = database
-        self._object_name = database._driver.get_name()+'Row'
+        #self._object_name = database._driver.get_name()+'Row'
         self._logger = logging.getLogger('dbplus')
 
     def __iter__(self):

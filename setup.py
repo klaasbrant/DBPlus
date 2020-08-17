@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='DBPlus',
-      version='0.1',
+      version='0.1.1',
       description='Generic Database Interface (DB2, MySQL, SQLite and more)',
       url='https://github.com/klaasbrant/DBPlus',
       author='Klaas Brant',

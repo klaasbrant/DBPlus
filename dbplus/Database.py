@@ -8,13 +8,13 @@ from dbplus.Statement import Statement
 from dbplus.helpers import _parse_database_url
 from contextlib import contextmanager
 from dbplus.helpers import _debug
-from dbplus.drivers import DB2  #add other drivers when available
+from importlib import import_module
+#from dbplus.drivers import db2, mysql, sqlite  #add other drivers when available
 
 
 class Database(object):
     """A Database connection."""
     
-    @_debug()
     def __init__(self, db_url=None, **kwargs):
         self._logger = logging.getLogger('dbplus')
         # If no db_url was provided, fallback to $DATABASE_URL in environment
@@ -27,7 +27,20 @@ class Database(object):
             raise ValueError('Database url missing or invalid')
         driver= dbParameters.pop('driver').upper()
         if driver == 'DB2':
+            from dbplus.drivers import DB2
             self._driver = DB2.DB2Driver(**dbParameters) # and of to the races with DB2!
+        elif driver == 'MYSQL':
+            from dbplus.drivers import MySQL
+            self._driver = MySQL.MySQLDriver(**dbParameters) # and of to the races with MySQL!
+        elif driver == 'SQLITE':
+            from dbplus.drivers import SQLite 
+            self._driver = SQLite.SQLiteDriver(**dbParameters) # and of to the races with SQLite!            
+        elif driver == 'ORACLE':
+            from dbplus.drivers import Oracle 
+            self._driver = Oracle.OracleDriver(**dbParameters) # and of to the races with Oracle!   
+        elif driver == 'POSTGRES':
+            from dbplus.drivers import Postgres 
+            self._driver = Postgres.PostgresDriver(**dbParameters) # and of to the races with Oracle!                      
         else: # add new drivers here
             raise ValueError('DBPlus does not have a driver for: {}'.format(driver))
         self._logger.info("--> Using Database driver: {}".format(driver))
@@ -56,16 +69,15 @@ class Database(object):
         return '<Database open={}>'.format(self.is_connected())
 
     def get_driver(self):
-        return self._driver    
+        return self._driver
 
     def is_connected(self):
-        return self._driver.is_connected()        
+        return self._driver.is_connected()
 
     def ensure_connected(self):
         if not self.is_connected():
-            self.open()            
+            self.open()
 
-    @_debug()
     def query(self, query, fetchall=False,*args, **kwargs):
         """Executes the given SQL query against the Database. Parameters
         can, optionally, be provided. Returns a RecordCollection, which can be
@@ -74,29 +86,27 @@ class Database(object):
         self.ensure_connected()
         cursor=Statement(self)
         cursor.execute(query, *args, **kwargs)
-        
+
         # Turn the cursor into RecordCollection
         rows = (Record(row) for row in cursor)
         results = RecordCollection(rows,cursor)
-        
+
         # Fetch all results if desired otherwise we fetch when needed (open cursor can be locking problem!
         if fetchall:
             results.all()
 
         return results
 
-    @_debug()
     def execute(self, sql, *args, **kwargs):
         self._logger.info("--> Execute: {} with arguments [{}]".format(sql,str(args)))
         self.ensure_connected()
         modified = Statement(self).execute(sql, *args, **kwargs)
         return modified
 
-    @_debug()
     def callproc(self, procname, *params):
         self._logger.info("--> Calling Stored proc: {} with arguments [{}]".format(procname,str(params)))
         self.ensure_connected()
-        return self._driver.callproc(procname, *params)        
+        return self._driver.callproc(procname, *params)
 
     def last_insert_id(self, seq_name=None):
         self.ensure_connected()
@@ -124,7 +134,6 @@ class Database(object):
             self.rollback()
             raise ex
 
-    @_debug()
     def begin_transaction(self):
         self.ensure_connected()
         if self._transaction_active == True:
@@ -132,7 +141,6 @@ class Database(object):
         self._transaction_active = True
         self._driver.begin_transaction()
 
-    @_debug()
     def commit(self):
         if self._transaction_active == False:
             raise RuntimeError('Commit on never started transaction')
@@ -140,7 +148,6 @@ class Database(object):
         self._driver.commit()
         self._transaction_active = False
 
-    @_debug()
     def rollback(self):
         if self._transaction_active == False:
             raise RuntimeError('Rollback on never started transaction')
@@ -149,4 +156,4 @@ class Database(object):
         self._driver.rollback()
 
     def is_transaction_active(self):
-        return self._transaction_active        
+        return self._transaction_active

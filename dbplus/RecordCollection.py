@@ -53,11 +53,14 @@ class RecordCollection(object):
 
     def __next__(self):
         try:
+            #print("===== in next ====")
             nextrow = next(self._rows)
+            #print("======= out next: row ===>",nextrow)
             self._all_rows.append(nextrow)
             return nextrow
         except StopIteration:
             self.pending = False
+            #print("==== EOF ===")
             raise StopIteration('RecordCollection contains no more rows.')
 
     def __getitem__(self, key):

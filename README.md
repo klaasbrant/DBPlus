@@ -2,10 +2,19 @@
 DBPlus is a interface layer between the several python database interface and your program
 
 # Install
-Clone the repository and issue "pip install ."
+The latest stable release from pypi: pip install DBPlus
+
+From github: Clone the repository using git and issue "pip install ."
+
+*Please note* that DBPlus requires you to install the clients and their pre-req's:
+
+- DB2: ibm_db
+- SQLite: builtin into python (no client required)
+- MySQL: Mysql Connector
+- Oracle: CX_Oracle
+- Postgresql: psycopg2 
 
 # What's next?
-- Add Oracle and Postgresql
-- Add tests
-- Add documentation
-- Add to PyPi for easy install
+- Add tests / bug fixing
+- Add examples
+- Add more documentation

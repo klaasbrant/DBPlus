@@ -73,16 +73,21 @@ def _parse_database_url(name):
     else:
         return None
 
+# @debug only works in python3 using __qualname__
 def debug(loggername):
-    logger = logging.getLogger(loggername) 
+    logger = logging.getLogger(loggername)
     def log_():
         def wrapper(f):
             def wrapped(*args, **kargs):
-                logger.debug('>>> enter {0} args: {1} - kwargs: {2}'.format(f.__qualname__,str(args[1:]),str(kargs))) #omit self in the args...
+                if (sys.version_info > (3, 0)):
+                    func=f.__qualname__
+                else:
+                    func=""
+                logger.debug('>>> enter {0} args: {1} - kwargs: {2}'.format(func,str(args[1:]),str(kargs))) #omit self in the args...
                 ts = time.time()
                 r = f(*args, **kargs)
                 te = time.time()
-                logger.debug('<<< leave {} - time: {:0.3f} sec'.format(f.__qualname__,te-ts))
+                logger.debug('<<< leave {} - time: {:0.3f} sec'.format(func,te-ts))
                 return r
             return wrapped
         return wrapper
