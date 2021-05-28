@@ -57,8 +57,8 @@ class Database(object):
 
     def __del__(self):
         if hasattr(self, "_driver"):
-                #self._driver.close()
-                self._driver=None
+            #self._driver.close()
+            self._driver=None
 
     def __enter__(self):
         return self
