@@ -14,8 +14,8 @@ From github: Clone the repository using git and issue "pip install ."
 - Oracle: CX_Oracle
 - Postgresql: psycopg2 
 
+Documentation : [![Documentation Status](https://readthedocs.org/projects/dbplus/badge/?version=latest)](https://dbplus.readthedocs.io/en/latest/?badge=latest)
+
 # What's next?
-- Documentation on readthedocs.io
 - Add tests / bug fixing
-- Add examples
-- Add more documentation
+- Add more documentation / examples
