@@ -10,7 +10,7 @@ Welcome to documentation for DBPlus
    :maxdepth: 2
    :caption: Contents:
 
-
+   license
 
 Indices and tables
 ==================
