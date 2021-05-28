@@ -15,6 +15,7 @@ From github: Clone the repository using git and issue "pip install ."
 - Postgresql: psycopg2 
 
 # What's next?
+- Documentation on readthedocs.io
 - Add tests / bug fixing
 - Add examples
 - Add more documentation
