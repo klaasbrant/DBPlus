@@ -1,6 +1,8 @@
 from __future__ import absolute_import, division, print_function, with_statement
 import psycopg2
+import logging
 from dbplus.drivers import BaseDriver
+from dbplus.helpers import _debug
 
 class PostgresDriver(BaseDriver):
     _cursor = None
@@ -9,7 +11,9 @@ class PostgresDriver(BaseDriver):
     def __init__(self, timeout=0, charset="utf8", timezone="SYSTEM",  **params):
         #self._params = dict(charset=charset, time_zone = timezone, connect_timeout=timeout, autocommit=True)
         #print('>>>',params)
-        self._params = dict()
+        self._driver = "Postgresql"
+        self._logger = logging.getLogger('dbplus')
+        self._params = params
         self._params["user"] = params.pop('uid')
         self._params["password"] = params.pop('pwd')
         self._params["database"] = params.pop('database')
@@ -27,14 +31,12 @@ class PostgresDriver(BaseDriver):
 
     def connect(self):
         #self.close()
+        #self._logger.info("--> CONNECT {}".format(**self._params))
         try:
-            print("================>",self._params)
             self._conn = psycopg2.connect(**self._params)
             self._cursor = self._conn.cursor()
-            print("----> We ARE IN!")
-        except Exception as ex:
-            print("BUMMER")    
-            raise ex 
+        except psycopg2.Error as ex:
+            raise RuntimeError('Problem connection to database {}: {}'.format(self._params["database"],ex))
 
     def close(self):
         self.clear()
@@ -42,10 +44,10 @@ class PostgresDriver(BaseDriver):
             self._conn.close()
             self._conn = None
 
-    def clear(self):
+    def clear(self,Statement):
         if self._cursor is not None:
-            self._cursor.close()
-            self._cursor = None
+            Statement._cursor.close()
+            Statement._cursor = None
 
     def error_code(self):
         return self._conn.errno()
@@ -57,7 +59,7 @@ class PostgresDriver(BaseDriver):
         try:
             Statement._cursor = self._conn.cursor()
             Statement._cursor.execute(sql, params)
-            return 0
+            return Statement._cursor.rowcount
         except Exception as err:
             print(err)
             raise err
@@ -101,7 +103,7 @@ class PostgresDriver(BaseDriver):
         return self._conn.literal(value)
 
     def get_name(self):
-        return "mysql"
+        return "postgresql"
 
     def callproc(self, procname, *params):
         try:

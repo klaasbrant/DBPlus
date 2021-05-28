@@ -8,7 +8,8 @@ class OracleDriver(BaseDriver):
 
     def __init__(self, timeout=0, charset="utf8", timezone="SYSTEM",  **params):
         #self._params = dict(charset=charset, time_zone = timezone, connect_timeout=timeout, autocommit=True)
-        #print('>>>',params)
+        self._logger = logging.getLogger('dbplus')
+        self._logger.info("Oracle init params {}".format(params))
         self._params = dict()
         self._params["user"] = params.pop('uid')
         self._params["password"] = params.pop('pwd')
@@ -21,10 +22,10 @@ class OracleDriver(BaseDriver):
         #self.close()
         try:
             dsn = cx_Oracle.makedsn(self._params["host"],self._params["port"],sid=self._params["database"])
-            #print("---->",dsn)
+            self._logger.info("Oracle connect dsn={}".format(dsn))
             self._conn = cx_Oracle.connect(user=self._params["user"],password=self._params["password"],dsn=dsn)
             self._cursor = self._conn.cursor()
-            #print("----> We ARE IN!")
+            self._logger.info("Connect OK!")
         except Exception as ex:
             print("BUMMER")    
             raise ex
@@ -46,20 +47,20 @@ class OracleDriver(BaseDriver):
 
     def callproc(self, procname, *params):
         try:
-            result = cx_Oracle.callproc(self._conn, procname, tuple(*params))
-            return list(result[1:])
+            _cursor = self._conn.cursor()
+            result = _cursor.callproc(procname, tuple(*params))
+            return list(result[0:])
         except Exception as ex:
-            self._error = cx_Oracle.stmt_errormsg()
-            raise RuntimeError("Error calling stored proc: {}, with parameters: {} : {}".format(procname, params,ex))
+            raise RuntimeError("Error calling stored proc: {}, with parameters: {} \n{}".format(procname, params,str(ex)))
 
 
-    def execute(self, Statement, sql, *params):
+    def execute(self, Statement, sql, **kwargs):
+        self._logger.info("Oracle execute sql: {} params {}".format(sql,kwargs))
         try:
             Statement._cursor = self._conn.cursor()
-            return Statement._cursor.execute(sql, params)
+            return Statement._cursor.execute(sql, kwargs)
         except Exception as ex:
-            self._error = cx_Oracle.stmt_errormsg()
-            raise RuntimeError("Error executing SQL: {}, with parameters: {} : {}".format(sql, params,ex))
+            raise RuntimeError("Error executing SQL: {}, with parameters: {} \n{}".format(sql, kwargs,str(ex)))
 
 
     def iterate(self, Statement):
@@ -67,9 +68,11 @@ class OracleDriver(BaseDriver):
             raise StopIteration
         row = self._next_row(Statement)
         while (row):
+            self._logger.info("Oracle next row: {} ".format(row)) 
             yield row
             row = self._next_row(Statement)
         #ibm_db.free_result(Statement._cursor)
+        self._logger.info("Oracle no next row")
         Statement._cursor = None
 
 
@@ -85,9 +88,9 @@ class OracleDriver(BaseDriver):
 
     def clear(self,Statement):
         if Statement._cursor is not None:
-            pass
+            #pass
             #cx_Oracle.free_result(Statement._cursor)
-            #Statement._cursor = None
+            Statement._cursor = None
 
 
     def next_result(self,cursor):
@@ -116,7 +119,7 @@ class OracleDriver(BaseDriver):
 
 
     def get_placeholder(self):
-        return "?"
+        return ":"
 
 
     def get_name(self):

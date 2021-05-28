@@ -57,7 +57,8 @@ class Database(object):
 
     def __del__(self):
         if hasattr(self, "_driver"):
-            self._driver.close()
+                #self._driver.close()
+                self._driver=None
 
     def __enter__(self):
         return self
@@ -78,7 +79,8 @@ class Database(object):
         if not self.is_connected():
             self.open()
 
-    def query(self, query, fetchall=False,*args, **kwargs):
+    #def query(self, query, fetchall=False,*args, **kwargs):
+    def query(self, query, *args, **kwargs):
         """Executes the given SQL query against the Database. Parameters
         can, optionally, be provided. Returns a RecordCollection, which can be
         iterated over to get result rows as dictionaries.
@@ -92,8 +94,8 @@ class Database(object):
         results = RecordCollection(rows,cursor)
 
         # Fetch all results if desired otherwise we fetch when needed (open cursor can be locking problem!
-        if fetchall:
-            results.all()
+        #if fetchall:
+        #    results.all()
 
         return results
 
