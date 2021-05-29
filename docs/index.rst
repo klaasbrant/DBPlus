@@ -10,7 +10,8 @@ Welcome to documentation for DBPlus
    :maxdepth: 2
    :caption: Contents:
 
-   license
+Tablib is an ISC Licensed database access library that is database-agnostic using sql, written in Python.
+It allows you to query your database and use the results in Python as well as transfer the results to popular libraries like Panda, NumPy and tablib.
 
 Indices and tables
 ==================
@@ -18,3 +19,15 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+User's Guide
+------------
+
+This part of the documentation, which is mostly prose, begins with some background information about DBPlus, then focuses on step-by-step instructions for getting the most out of your datasets
+
+.. toctree::
+   :maxdepth: 2
+
+   install
+   license
+

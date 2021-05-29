@@ -15,4 +15,5 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 Open source software used in this repo:
-Records (modified): Copyright (c) 2016, Kenneth Reitz <me@kennethreitz.org>
+
+- Records (modified): Copyright (c) 2016, Kenneth Reitz <me@kennethreitz.org>
