@@ -1,8 +1,8 @@
 # Introduction 
-DBPlus is a interface layer between the several python database interface and your program
+DBPlus is a interface layer between the several python database interfaces and your program. It makes the SQL access from your program database-agnostic meaning the same code can run unmodified on several databases. All you need to change is the database URL. Of course if you use specific SQL that will only work on a certain database DBPlus can not change this.
 
-# Install
-The latest stable release from pypi: pip install DBPlus
+# Installation
+The latest stable release from pypi: pip install dbplus
 
 From github: Clone the repository using git and issue "pip install ."
 
@@ -19,3 +19,4 @@ Documentation : [![Documentation Status](https://readthedocs.org/projects/dbplus
 # What's next?
 - Add tests / bug fixing
 - Add more documentation / examples
+- more cool stuff and of course your suggestions are welcome
