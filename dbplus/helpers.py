@@ -3,6 +3,8 @@ import decimal
 import sys
 import logging
 import time
+import datetime
+import ast 
 
 if (sys.version_info[0] > 2):
     unicode = str
@@ -19,6 +21,32 @@ def isexception(obj):
     if isclass(obj) and issubclass(obj, Exception):
         return True
     return False
+
+def guess_type(x):
+    # This function guesses the input and returns that type
+    attempt_fns = [ ast.literal_eval,
+                    lambda x: datetime.datetime.strptime(x,"%Y-%m-%d"),
+                    lambda x: datetime.datetime.strptime(x,"%Y-%m-%d %H:%M:%S"),
+                   int, 
+                   float
+                   ]
+    for fn in attempt_fns:
+        try:
+            return fn(x)
+        except (ValueError, SyntaxError):
+            pass
+    return x # not a string, number or date? Just return input
+
+def fix_sql_type(x,null):
+    x=null if x == null else x
+    return x
+
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
 
 def _reduce_datetimes(row):
     """Receives a row, converts datetimes to strings."""

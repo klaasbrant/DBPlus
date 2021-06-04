@@ -65,7 +65,6 @@ class SQLiteDriver(BaseDriver):
     def execute(self, Statement, sql, *params):
         try:
             #self._log(sql, *params)
-            print(sql,params)
             self._error = None
             Statement._cursor = self._conn.execute(sql, params)
             return self.row_count()

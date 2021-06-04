@@ -64,6 +64,15 @@ class PostgresDriver(BaseDriver):
             print(err)
             raise err
 
+    def execute_many(self,Statement, sql, params):
+        try:
+            Statement._cursor = self._conn.cursor()
+            Statement._cursor.execute(sql, tuple(params))
+            return Statement._cursor.rowcount
+        except Exception as err:
+            print(err)
+            raise RuntimeError("Error executing SQL: {}, with parameters: {} : {}".format(sql, params,err))     
+
     def iterate(self, Statement):
         if Statement._cursor is None:
             raise StopIteration

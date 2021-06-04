@@ -84,6 +84,17 @@ class DB2Driver(BaseDriver):
             raise RuntimeError("Error executing SQL: {}, with parameters: {} : {}".format(sql, params,ex))
 
     @_debug()
+    def execute_many(self,Statement, sql, params):
+        try:
+            stmt = ibm_db.prepare(self._conn, str(sql))
+            ibm_db.execute_many(stmt, tuple(params))
+            Statement._cursor = stmt
+            return ibm_db.num_rows(stmt)
+        except Exception as ex:
+            self._error = ibm_db.stmt_errormsg()
+            raise RuntimeError("Error executing SQL: {}, with parameters: {} : {}".format(sql, params,ex))
+
+    @_debug()
     def iterate(self, Statement):
         if Statement._cursor is None:
             raise StopIteration

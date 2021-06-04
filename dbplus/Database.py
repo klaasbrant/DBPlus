@@ -2,15 +2,16 @@ from __future__ import absolute_import, division, print_function, with_statement
 import logging
 import os
 import time
+import csv
 from dbplus.Record import Record
 from dbplus.RecordCollection import RecordCollection
 from dbplus.Statement import Statement
-from dbplus.helpers import _parse_database_url
+from dbplus.helpers import _parse_database_url, guess_type, fix_sql_type, _reduce_datetimes
 from contextlib import contextmanager
 from dbplus.helpers import _debug
 from importlib import import_module
 #from dbplus.drivers import db2, mysql, sqlite  #add other drivers when available
-
+import numpy as np
 
 class Database(object):
     """A Database connection."""
@@ -25,40 +26,50 @@ class Database(object):
             dbParameters =_parse_database_url(db_url)
         if dbParameters == None:  # that means parsing failed!!
             raise ValueError('Database url missing or invalid')
-        driver= dbParameters.pop('driver').upper()
-        if driver == 'DB2':
-            from dbplus.drivers import DB2
-            self._driver = DB2.DB2Driver(**dbParameters) # and of to the races with DB2!
-        elif driver == 'MYSQL':
-            from dbplus.drivers import MySQL
-            self._driver = MySQL.MySQLDriver(**dbParameters) # and of to the races with MySQL!
-        elif driver == 'SQLITE':
-            from dbplus.drivers import SQLite 
-            self._driver = SQLite.SQLiteDriver(**dbParameters) # and of to the races with SQLite!            
-        elif driver == 'ORACLE':
-            from dbplus.drivers import Oracle 
-            self._driver = Oracle.OracleDriver(**dbParameters) # and of to the races with Oracle!   
-        elif driver == 'POSTGRES':
-            from dbplus.drivers import Postgres 
-            self._driver = Postgres.PostgresDriver(**dbParameters) # and of to the races with Oracle!                      
-        else: # add new drivers here
-            raise ValueError('DBPlus does not have a driver for: {}'.format(driver))
-        self._logger.info("--> Using Database driver: {}".format(driver))
-        self._transaction_active = False
-        self.open()
+        self.db_type= dbParameters.pop('driver').upper()
+        try:
+            if self.db_type == 'DB2':
+                from dbplus.drivers import DB2
+                self._driver = DB2.DB2Driver(**dbParameters) # and of to the races with DB2!
+            elif self.db_type == 'MYSQL':
+                from dbplus.drivers import MySQL
+                self._driver = MySQL.MySQLDriver(**dbParameters) # and of to the races with MySQL!
+            elif self.db_type == 'SQLITE':
+                from dbplus.drivers import SQLite 
+                self._driver = SQLite.SQLiteDriver(**dbParameters) # and of to the races with SQLite!            
+            elif self.db_type == 'ORACLE':
+                from dbplus.drivers import Oracle 
+                self._driver = Oracle.OracleDriver(**dbParameters) # and of to the races with Oracle!   
+            elif self.db_type == 'POSTGRES':
+                from dbplus.drivers import Postgres 
+                self._driver = Postgres.PostgresDriver(**dbParameters) # and of to the races with Oracle!                      
+            else: # add new drivers here
+                raise ValueError('DBPlus has no driver for: {}'.format(self.db_type))
+       
+            self._logger.info("--> Using Database driver: {}".format(self.db_type))
+            if kwargs.pop('open',True):
+                self.open()
+                if not self.is_connected():
+                    raise ValueError('DBPlus cannot establish database connection')
+            self._transaction_active = False
+        except:   
+            raise ValueError('DBPlus has trouble initializing the {} driver... mission aborted!'.format(self.db_type.lower())) 
+
 
     def open(self):
         """Opens the connection to the Database."""
-        self._driver.connect()
+        if not self.is_connected():
+            self._driver.connect()
 
     def close(self):
         """Closes the connection to the Database."""
-        self._driver.close()
+        if self.is_connected():
+            self._driver.close()
 
     def __del__(self):
         if hasattr(self, "_driver"):
-            #self._driver.close()
-            self._driver=None
+            #self._driver.close() # Say goodbye and
+            del self._driver     # allow database interface to gracefully exit
 
     def __enter__(self):
         return self
@@ -67,7 +78,7 @@ class Database(object):
         self.close()
 
     def __repr__(self):
-        return '<Database open={}>'.format(self.is_connected())
+        return '<DBPlus {} database (url: {}), state: connected={}>'.format(self.db_type,self.db_url,self.is_connected())
 
     def get_driver(self):
         return self._driver
@@ -78,6 +89,8 @@ class Database(object):
     def ensure_connected(self):
         if not self.is_connected():
             self.open()
+
+    #########################################################################################################################
 
     #def query(self, query, fetchall=False,*args, **kwargs):
     def query(self, query, *args, **kwargs):
@@ -121,6 +134,53 @@ class Database(object):
     def error_info(self):
         self.ensure_connected()
         return self._driver.error_info()
+
+    def copy_to(self,file,table,sep='\t',null='\\N',columns=None,header=False,**kwargs):
+        col="*" if columns==None else ",".join(columns)
+        sql_query="select {} from {}".format(col,table)
+        cursor=Statement(self)
+        cursor.execute(sql_query)
+        row_count = 0
+        with open(file, 'w') as csvfile:
+            for row in cursor:
+                row_count += 1
+                if row_count == 1:
+                    csv_columns=row.keys()
+                    writer = csv.DictWriter(csvfile,fieldnames=csv_columns,restval='\\N',delimiter=sep,**kwargs)
+                    if header:
+                        writer.writeheader()
+
+                for key in row.keys():
+                    if row[key]==None:
+                        row[key]=null
+                writer.writerow(row)
+        return row_count
+                
+    def copy_from(self,file, table, sep='\t', null='\\N', batch=1000, columns=None, **kwargs):
+        col="" if columns==None else "({})".format(",".join(columns))
+        row_count = 0
+        queue = list()
+        #values = list()
+        with open(file, 'r') as csvfile:
+            reader=csv.reader(csvfile,delimiter=sep,**kwargs)
+            for row in reader:
+                row_count += 1
+                values = tuple(None if x == null else x for x in row)
+                queue.append(values)
+                if len(queue) >= batch:
+                    self._insert_values(table,col,queue)
+                    queue = list()
+            if len(queue) > 0:
+                self._insert_values(table,col,queue)
+        return row_count
+
+    def _insert_values(self,table,col,queue):
+        values_literal= "({})".format(",".join([self.get_driver().get_placeholder()] * len(queue[0])))
+        sql_query="insert into {} {} values {}".format(table,col,values_literal)
+        self.get_driver().execute_many(self,sql_query,queue)
+
+
+    #########################################################################################################################
 
     @contextmanager
     def transaction(self):
