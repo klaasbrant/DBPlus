@@ -67,7 +67,7 @@ class PostgresDriver(BaseDriver):
     def execute_many(self,Statement, sql, params):
         try:
             Statement._cursor = self._conn.cursor()
-            Statement._cursor.execute(sql, tuple(params))
+            Statement._cursor.execute(sql, params)
             return Statement._cursor.rowcount
         except Exception as err:
             print(err)
