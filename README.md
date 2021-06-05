@@ -59,7 +59,7 @@ print(db.query('select * from klaas.texample'))
 
 Output from example above:
 
-| ``empno | firstnme  | midinit | lastname  | workdept | phoneno | hiredate   | job      | edlevel | sex  | birthdate  | salary    | bonus   | comm    |
+| empno | firstnme  | midinit | lastname  | workdept | phoneno | hiredate   | job      | edlevel | sex  | birthdate  | salary    | bonus   | comm    |
 | ------- | --------- | ------- | --------- | -------- | ------- | ---------- | -------- | ------- | ---- | ---------- | --------- | ------- | ------- |
 | 000010  | CHRISTINE | I       | HAAS      | A00      | 3978    | 1995-01-01 | PRES     | 18      | F    | 1963-08-24 | 152750.00 | 1000.00 | 4220.00 |
 | 200010  | DIAN      | J       | HEMMINGER | A00      | 3978    | 1995-01-01 | SALESREP | 18      | F    | 1973-08-14 | 46500.00  | 1000.00 | 4220.00 |
