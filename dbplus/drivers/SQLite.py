@@ -66,7 +66,10 @@ class SQLiteDriver(BaseDriver):
         try:
             #self._log(sql, *params)
             self._error = None
+            if Statement._cursor == None:
+                Statement._cursor = self._conn.cursor()
             Statement._cursor = self._conn.execute(sql, params)
+            self._conn.commit()
             return self.row_count()
         except Exception as ex:
             self._error = str(ex)
