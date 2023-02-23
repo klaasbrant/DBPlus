@@ -6,12 +6,6 @@ import time
 import datetime
 import ast 
 
-if (sys.version_info[0] > 2):
-    unicode = str
-else:
-    unicode=unicode
-
-
 def isexception(obj):
     """Given an object, return a boolean indicating whether it is an instance
     or subclass of :py:class:`Exception`.
@@ -112,10 +106,10 @@ def debug(loggername):
                 else:
                     func=""
                 logger.debug('>>> enter {0} args: {1} - kwargs: {2}'.format(func,str(args[1:]),str(kargs))) #omit self in the args...
-                ts = time.time()
+                tic = time.perf_counter()
                 r = f(*args, **kargs)
-                te = time.time()
-                logger.debug('<<< leave {} - time: {:0.3f} sec'.format(func,te-ts))
+                toc = time.perf_counter()
+                logger.debug('<<< leave {} - time: {:0.4f} sec'.format(func,toc-tic))
                 return r
             return wrapped
         return wrapper

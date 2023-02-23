@@ -7,7 +7,7 @@ class MySQLDriver(BaseDriver):
     _cursor = None
     _con = None
 
-    def __init__(self, timeout=0, charset="utf8", timezone="SYSTEM",  **params):
+    def __init__(self, timeout=0, charset="utf8", timezone="SYSTEM", port=3306, **params):
         #self._params = dict(charset=charset, time_zone = timezone, connect_timeout=timeout, autocommit=True)
         #print('>>>',params)
         self._params = dict()

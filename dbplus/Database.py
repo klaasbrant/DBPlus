@@ -1,7 +1,5 @@
-from __future__ import absolute_import, division, print_function, with_statement
 import logging
 import os
-import time
 import csv
 from dbplus.Record import Record
 from dbplus.RecordCollection import RecordCollection
@@ -10,14 +8,17 @@ from dbplus.helpers import _parse_database_url, guess_type, fix_sql_type, _reduc
 from contextlib import contextmanager
 from dbplus.helpers import _debug
 from importlib import import_module
-#from dbplus.drivers import db2, mysql, sqlite  #add other drivers when available
-import numpy as np
+
+class DBError(Exception):
+    pass
 
 class Database(object):
     """A Database connection."""
     
     def __init__(self, db_url=None, **kwargs):
         self._logger = logging.getLogger('dbplus')
+        self._transaction_active = False
+        
         # If no db_url was provided, fallback to $DATABASE_URL in environment
         DATABASE_URL = os.environ.get('DATABASE_URL')
         self.db_url = db_url or DATABASE_URL
@@ -51,10 +52,8 @@ class Database(object):
                 self.open()
                 if not self.is_connected():
                     raise ValueError('DBPlus cannot establish database connection')
-            self._transaction_active = False
         except:   
             raise ValueError('DBPlus has trouble initializing the {} driver... mission aborted!'.format(self.db_type.lower())) 
-
 
     def open(self):
         """Opens the connection to the Database."""
@@ -79,6 +78,13 @@ class Database(object):
 
     def __repr__(self):
         return '<DBPlus {} database (url: {}), state: connected={}>'.format(self.db_type,self.db_url,self.is_connected())
+    
+    ################# Experimental feature, driver might offer extra options ############################
+    def __getattr__(self, name):
+        def method(*args, **kw):
+            if hasattr(self._driver, name) and callable(getattr(self._driver, name)):
+                return getattr(self._driver,name)(*args,**kw)
+        return method
 
     def get_driver(self):
         return self._driver
@@ -135,51 +141,6 @@ class Database(object):
         self.ensure_connected()
         return self._driver.error_info()
 
-    def copy_to(self,file,table,sep='\t',null='\\N',columns=None,header=False,**kwargs):
-        col="*" if columns==None else ",".join(columns)
-        sql_query="select {} from {}".format(col,table)
-        cursor=Statement(self)
-        cursor.execute(sql_query)
-        row_count = 0
-        with open(file, 'w') as csvfile:
-            for row in cursor:
-                row_count += 1
-                if row_count == 1:
-                    csv_columns=row.keys()
-                    writer = csv.DictWriter(csvfile,fieldnames=csv_columns,restval='\\N',delimiter=sep,**kwargs)
-                    if header:
-                        writer.writeheader()
-
-                for key in row.keys():
-                    if row[key]==None:
-                        row[key]=null
-                writer.writerow(row)
-        return row_count
-                
-    def copy_from(self,file, table, sep='\t', null='\\N', batch=1000, columns=None, **kwargs):
-        col="" if columns==None else "({})".format(",".join(columns))
-        row_count = 0
-        queue = list()
-        #values = list()
-        with open(file, 'r') as csvfile:
-            reader=csv.reader(csvfile,delimiter=sep,**kwargs)
-            for row in reader:
-                row_count += 1
-                values = tuple(None if x == null else x for x in row)
-                queue.append(values)
-                if len(queue) >= batch:
-                    self._insert_values(table,col,queue)
-                    queue = list()
-            if len(queue) > 0:
-                self._insert_values(table,col,queue)
-        return row_count
-
-    def _insert_values(self,table,col,queue):
-        values_literal= "({})".format(",".join([self.get_driver().get_placeholder()] * len(queue[0])))
-        sql_query="insert into {} {} values {}".format(table,col,values_literal)
-        self.get_driver().execute_many(self,sql_query,queue)
-
-
     #########################################################################################################################
 
     @contextmanager
@@ -199,23 +160,81 @@ class Database(object):
     def begin_transaction(self):
         self.ensure_connected()
         if self._transaction_active == True:
-            raise RuntimeError('Nested transactions is not supported')
+            raise DBError('Nested transactions is not supported!')
         self._transaction_active = True
         self._driver.begin_transaction()
 
     def commit(self):
         if self._transaction_active == False:
-            raise RuntimeError('Commit on never started transaction')
+            raise DBError('Commit on never started transaction?')
         self.ensure_connected()
         self._driver.commit()
         self._transaction_active = False
 
     def rollback(self):
         if self._transaction_active == False:
-            raise RuntimeError('Rollback on never started transaction')
+            raise DBError('Rollback on never started transaction?')
         self.ensure_connected()
         self._transaction_active = False
         self._driver.rollback()
 
     def is_transaction_active(self):
         return self._transaction_active
+
+    #########################################################################################################################
+
+
+    def copy_to(self,file,table,sep='\t',null="\\x00",columns=None,header=False,append=False,recsep='\n',**kwargs):
+        col="*" if columns==None else ",".join(columns)
+        sql_query="select {} from {}".format(col,table)
+        cursor=Statement(self)
+        cursor.execute(sql_query)
+        row_count = 0
+        mode = 'a' if append else 'w'
+        with open(file, mode) as csvfile:
+            for row in cursor:
+                row_count += 1
+                if row_count == 1:
+                    csv_columns=row.keys()
+                    #csv_columns = [each_column_name.upper() for each_column_name in csv_columns]
+                    writer = csv.DictWriter(csvfile,fieldnames=csv_columns,lineterminator=recsep,restval='',delimiter=sep,quoting=csv.QUOTE_MINIMAL,**kwargs)
+                    if header:
+                        writer.writeheader()
+
+                for key in row.keys():
+                    if row[key]==None:
+                        row[key]=null
+                writer.writerow(row)
+        return row_count
+                
+    def copy_from(self,file, table, sep='\t',recsep='\n',header=False, null="\\x00", batch=500, columns=None, **kwargs):
+        col="" if columns==None else "({})".format(",".join(columns))
+        row_count = 0
+        queue = list()
+        #values = list()
+        with open(file, 'r') as csvfile:
+            reader=csv.reader(csvfile,delimiter=sep,lineterminator=recsep,quoting=csv.QUOTE_MINIMAL,**kwargs)
+            if header:
+                xh = next(reader)
+                #print(f'Header: {", ".join(xh)}')
+            for row in reader:
+                row_count += 1
+                values = tuple(None if x == null else x for x in row)
+                queue.append(values)
+                if len(queue) >= batch:
+                    self._insert_values(table,col,queue)
+                    queue = list()
+            if len(queue) > 0:
+                self._insert_values(table,col,queue)
+        return row_count
+
+    def _insert_values(self,table,col,queue):
+        values_literal= "({})".format(",".join([self.get_driver().get_placeholder()] * len(queue[0])))
+        sql_query="insert into {} {} values {}".format(table,col,values_literal)
+        self.get_driver().execute_many(self,sql_query,queue)
+
+
+    #########################################################################################################################
+
+
+        

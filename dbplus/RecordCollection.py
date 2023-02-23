@@ -1,4 +1,4 @@
-from dbplus.helpers import _reduce_datetimes,unicode
+from dbplus.helpers import _reduce_datetimes
 from dbplus.Record import Record
 
 class RecordCollection(object):
@@ -20,8 +20,8 @@ class RecordCollection(object):
         data = self.all(as_tuple=True)
         if len(self) > 0:
             headers = self[0].as_dict()
-            result.append([unicode(h) for h in headers.keys()])
-            result.extend(list(map(unicode, row)) for row in data)
+            result.append([str(h) for h in headers.keys()])
+            result.extend(list(map(str, row)) for row in data)
             lens = [list(map(len, row)) for row in result]
             field_lens = list(map(max, zip(*lens)))
             result.insert(1, ['-' * length for length in field_lens])
