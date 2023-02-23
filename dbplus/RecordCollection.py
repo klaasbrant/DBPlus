@@ -1,4 +1,5 @@
 from dbplus.helpers import _reduce_datetimes
+import inspect
 from dbplus.Record import Record
 
 class RecordCollection(object):
@@ -149,6 +150,14 @@ class RecordCollection(object):
             return [r.as_tuple() for r in rows]    
 
         return rows  # list of records
+    
+    def as_model(self,model):
+        """return an array of pydantic models"""
+        if inspect.isclass(model):
+            rows = list(self)
+            return [r.as_model(model) for r in rows]    
+        else:
+            raise ValueError("as_model excepts a class as input")
 
     def as_dict(self):
         return self.all(as_dict=True)

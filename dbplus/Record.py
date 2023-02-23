@@ -1,4 +1,5 @@
 import json
+import inspect
 from dbplus.helpers import json_handler
 
 class Record(object):
@@ -67,3 +68,11 @@ class Record(object):
     
     def as_json(self):
         return json.dumps(self.as_dict(),indent=4, sort_keys=True, default=str)
+    
+    def as_model(self, model):
+        """return the row as pydantic model"""
+        if inspect.isclass(model):
+            return model.parse_obj(self.as_dict())
+        else:
+            raise ValueError("as_model excepts a class as input")
+        
