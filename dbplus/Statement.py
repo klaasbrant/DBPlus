@@ -31,9 +31,12 @@ class Statement:
 
         if self._connection.get_driver().get_placeholder() == ":":
             return self._connection.get_driver().execute(self, sql, **kwargs)
-        
+
         for i, arg in enumerate(args):
-            kwargs[i] = arg
+            if type(arg) is dict:
+                kwargs.update(arg)
+            else:
+                kwargs[i] = arg
         self._logger.info("--> Execute arg : {} ".format(kwargs))    
         params = []
         sql = Statement._re_params.sub(self._prepare(kwargs, params), sql)

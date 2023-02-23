@@ -21,7 +21,7 @@ class Record(object):
         return self._values
 
     def __repr__(self):
-        return '<Record {}>'.format(json.dumps(self.as_dict(),default=json_handler))
+        return f'<Record {format(json.dumps(self.as_dict(),default=json_handler))}>'
 
     def __getitem__(self, key):
         # Support for index-based lookup.
@@ -61,3 +61,9 @@ class Record(object):
 
     def as_tuple(self):
         return tuple(self.values())
+    
+    def as_list(self):
+        return list(self.values())
+    
+    def as_json(self):
+        return json.dumps(self.as_dict(),indent=4, sort_keys=True, default=str)

@@ -1,8 +1,11 @@
-from __future__ import absolute_import, division, print_function, with_statement
 import ibm_db
 import logging
+from dbplus.Statement import Statement
 from dbplus.drivers import BaseDriver
 from dbplus.helpers import _debug
+from dbplus.Record import Record
+from dbplus.Database import DBError
+from dbplus.RecordCollection import RecordCollection
 
 class DB2Driver(BaseDriver):
     @_debug()
@@ -14,7 +17,7 @@ class DB2Driver(BaseDriver):
 
         self._database = self._params.pop("database",None)
         if self._database is None:
-            raise RuntimeError("Database name missing or incorrect")            
+            raise DBError("Database name missing or incorrect")            
         
         self._uid = self._params.pop("uid",None)
         self._pwd = self._params.pop("pwd",None)
@@ -27,7 +30,7 @@ class DB2Driver(BaseDriver):
             self._port = 50000
 
         if self._host and ((self._uid is None) or (self._pwd is None)):
-            raise RuntimeError("Userid and/or Password missing")
+            raise DBError("Userid and/or Password missing")
 
         if self._host:
             conn_string='DATABASE={};UID={};PWD={};HOSTNAME={};PORT={};PROTOCOL=TCPIP;'.format(self._database,self._uid,self._pwd,self._host,self._port)
@@ -47,7 +50,7 @@ class DB2Driver(BaseDriver):
             self._conn = ibm_db.pconnect(self._conn_string, "", "",options)
         except Exception as ex:
             self._error = ibm_db.conn_errormsg()
-            raise RuntimeError('Problem connection to database {} : {}'.format(self._database,ex))
+            raise DBError('Problem connection to database {} : {}'.format(self._database,ex))
     
     @_debug()
     def close(self):
@@ -70,7 +73,7 @@ class DB2Driver(BaseDriver):
             return list(result[1:])
         except Exception as ex:
             self._error = ibm_db.stmt_errormsg()
-            raise RuntimeError("Error calling stored proc: {}, with parameters: {} : {}".format(procname, params,ex))
+            raise DBError("Error calling stored proc: {}, with parameters: {} : {}".format(procname, params,ex))
 
     @_debug()
     def execute(self, Statement, sql, *params):
@@ -81,7 +84,7 @@ class DB2Driver(BaseDriver):
             return ibm_db.num_rows(stmt)
         except Exception as ex:
             self._error = ibm_db.stmt_errormsg()
-            raise RuntimeError("Error executing SQL: {}, with parameters: {} : {}".format(sql, params,ex))
+            raise DBError("Error executing SQL: {}, with parameters: {} : {}".format(sql, params,ex))
 
     @_debug()
     def execute_many(self,Statement, sql, params):
@@ -92,7 +95,7 @@ class DB2Driver(BaseDriver):
             return ibm_db.num_rows(stmt)
         except Exception as ex:
             self._error = ibm_db.stmt_errormsg()
-            raise RuntimeError("Error executing SQL: {}, with parameters: {} : {}".format(sql, params,ex))
+            raise DBError("Error executing SQL: {}, with parameters: {} : {}".format(sql, params,ex))
 
     @_debug()
     def iterate(self, Statement):
@@ -119,7 +122,7 @@ class DB2Driver(BaseDriver):
     @_debug()
     def last_insert_id(self, seq_name=None):
         # Code like in ibm_dbi
-        operation = 'SELECT IDENTITY_VAL_LOCAL() FROM SYSIBM.SYSDUMMY1'
+        operation = 'values(IDENTITY_VAL_LOCAL()) FROM SYSIBM.SYSDUMMY1'
         try:
             stmt_handler = ibm_db.prepare(self._conn, operation)
             ibm_db.execute(stmt_handler)
@@ -130,7 +133,7 @@ class DB2Driver(BaseDriver):
                 identity_val = None
         except Exception as ex:
             self._error = ibm_db.stmt_errormsg()
-            raise RuntimeError("Error retrieving identity_val_local() : {}".format(ex))
+            raise DBError("Error retrieving identity_val_local() : {}".format(ex))
         return identity_val
 
     @_debug()
@@ -157,3 +160,12 @@ class DB2Driver(BaseDriver):
     @_debug()
     def get_name(self):
         return self._driver
+    
+    def columns(self,qualifier,schema,table_name,column_name):
+        stmt = Statement(self) # fake a statement in order to supply a generator / cursor
+        stmt._cursor = ibm_db.columns(self._conn,qualifier,schema,table_name,column_name) 
+        rows = (Record(row) for row in stmt) # create the generator
+        return RecordCollection(rows,stmt) # make a record collection
+    
+    def get_driver(self):  # needed for the extra methods in order to close the cursor
+        return self
