@@ -72,7 +72,8 @@ class Record(object):
     def as_model(self, model):
         """return the row as pydantic model"""
         if inspect.isclass(model):
-            return model.parse_obj(self.as_dict())
+            #return model.parse_obj(self.as_dict())
+            return model(**self.as_dict())
         else:
             raise ValueError("as_model excepts a class as input")
         

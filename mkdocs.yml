@@ -1,0 +1,13 @@
+### Site metadata ###
+
+site_name: DBPlus documentation
+site_description: DBPlus documentation with examples
+site_url: https://klaasbrant.github.io/DBPlus/
+
+repo_url: https://github.com/klaasbrant/DBPlus
+edit_uri: edit/master/docs/docs
+
+### Build settings ###
+
+nav:
+  - Home: index.md
