@@ -9,5 +9,7 @@ edit_uri: edit/master/docs/docs
 
 ### Build settings ###
 
+theme: material
+
 nav:
   - Home: index.md
