@@ -41,15 +41,15 @@ class Database(object):
                 from dbplus.drivers import Postgres 
                 self._driver = Postgres.PostgresDriver(**dbParameters) # and of to the races with Oracle!                      
             else: # add new drivers here
-                raise ValueError('DBPlus has no driver for: {}'.format(self.db_type))
+                raise ValueError(f"DBPlus has no driver for: {self.db_type}")
        
-            self._logger.info("--> Using Database driver: {}".format(self.db_type))
+            self._logger.info("--> Using Database driver: {self.db_type}")
             if kwargs.pop('open',True):
                 self.open()
                 if not self.is_connected():
                     raise ValueError('DBPlus cannot establish database connection')
         except:   
-            raise ValueError('DBPlus has trouble initializing the {} driver... mission aborted!'.format(self.db_type.lower())) 
+            raise ValueError(f"DBPlus has trouble initializing the {self.db_type.lower()} driver... mission aborted!") 
 
     def open(self):
         """Opens the connection to the Database."""
@@ -73,7 +73,7 @@ class Database(object):
         self.close()
 
     def __repr__(self):
-        return '<DBPlus {} database (url: {}), state: connected={}>'.format(self.db_type,self.db_url,self.is_connected())
+        return f"<DBPlus {self.db_type} database url: {db_url}), state: connected={self.is_connected()}>"
     
     ################# Experimental feature, driver might offer extra options ############################
     def __getattr__(self, name):
@@ -115,13 +115,13 @@ class Database(object):
         return results
 
     def execute(self, sql, *args, **kwargs):
-        self._logger.info("--> Execute: {} with arguments [{}]".format(sql,str(args)))
+        self._logger.info(f"--> Execute: {sql} with arguments [{str(args)}]")
         self.ensure_connected()
         modified = Statement(self).execute(sql, *args, **kwargs)
         return modified
 
     def callproc(self, procname, *params):
-        self._logger.info("--> Calling Stored proc: {} with arguments [{}]".format(procname,str(params)))
+        self._logger.info(f"--> Calling Stored proc: {procname} with arguments [{str(params)}]")
         self.ensure_connected()
         return self._driver.callproc(procname, *params)
 
@@ -156,20 +156,20 @@ class Database(object):
     def begin_transaction(self):
         self.ensure_connected()
         if self._transaction_active == True:
-            raise DBError('Nested transactions is not supported!')
+            raise DBError("Nested transactions is not supported!")
         self._transaction_active = True
         self._driver.begin_transaction()
 
     def commit(self):
         if self._transaction_active == False:
-            raise DBError('Commit on never started transaction?')
+            raise DBError("Commit on never started transaction?")
         self.ensure_connected()
         self._driver.commit()
         self._transaction_active = False
 
     def rollback(self):
         if self._transaction_active == False:
-            raise DBError('Rollback on never started transaction?')
+            raise DBError("Rollback on never started transaction?")
         self.ensure_connected()
         self._transaction_active = False
         self._driver.rollback()

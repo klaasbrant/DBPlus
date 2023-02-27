@@ -35,7 +35,7 @@ class Record(object):
             i = self.keys().index(key)
             return self.values()[i]
 
-        raise KeyError("Record contains no '{}' field.".format(key))
+        raise KeyError(f"Record does not contains '{key}' field.")
 
     def __getattr__(self, key):
         try:

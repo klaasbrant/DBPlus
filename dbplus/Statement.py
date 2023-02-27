@@ -5,14 +5,15 @@ from dbplus.helpers import _debug
 
 class Statement:
     _cursor = None
-    
+
     _re_params = re.compile(
-        r"(\?|(?<!:):[a-zA-Z_][a-zA-Z0-9_]*)(?=(?:(?:\\.|[^'\"\\])*['\"](?:\\.|[^'\"\\])*['\"])*(?:\\.|[^'\"\\])*\Z)")
+        r"(\?|(?<!:):[a-zA-Z_][a-zA-Z0-9_]*)(?=(?:(?:\\.|[^'\"\\])*['\"](?:\\.|[^'\"\\])*['\"])*(?:\\.|[^'\"\\])*\Z)"
+    )
 
     def __init__(self, database):
         self._connection = database
-        #self._object_name = database._driver.get_name()+'Row'
-        self._logger = logging.getLogger('dbplus')
+        # self._object_name = database._driver.get_name()+'Row'
+        self._logger = logging.getLogger("dbplus")
 
     def __iter__(self):
         return self.iterate()
@@ -22,14 +23,14 @@ class Statement:
             self._connection.get_driver().clear(self)
 
     def iterate(self):
-        #Driver iterate will return a row as dict
+        # Driver iterate will return a row as dict
         for row in self._connection.get_driver().iterate(self):
             yield row
 
     def execute(self, sql, *args, **kwargs):
-        if isinstance(sql,Query):
-            sql=sql.sql
-        self._logger.info("--> Execute : {} / {} / {}".format(sql,args,kwargs))
+        if isinstance(sql, Query):
+            sql = sql.sql
+        self._logger.info(f"--> Execute : {sql} :: {args=}, {kwargs=}")
 
         if self._connection.get_driver().get_placeholder() == ":":
             return self._connection.get_driver().execute(self, sql, **kwargs)
@@ -39,10 +40,10 @@ class Statement:
                 kwargs.update(arg)
             else:
                 kwargs[i] = arg
-        self._logger.info("--> Execute arg : {} ".format(kwargs))    
+        self._logger.info(f"--> Merged args :: {kwargs} ")
         params = []
         sql = Statement._re_params.sub(self._prepare(kwargs, params), sql)
-        self._logger.info("--> Query: {} {}".format(sql,params))
+        self._logger.info(f"--> Formatted Query: {sql} {params}")
         return self._connection.get_driver().execute(self, sql, *params)
 
     def next_result(self):
@@ -59,9 +60,13 @@ class Statement:
 
             if key not in params:
                 if isinstance(key, int):
-                    raise LookupError("SQL Positional parameter with index #{} not found in arguments: {}".format(key, params))
+                    raise LookupError(
+                        f"SQL Positional parameter with index #{key} not found in arguments: {params}"
+                    )
                 else:
-                    raise LookupError("SQL Named parameter :{} not found in arguments: {}".format(key, params))
+                    raise LookupError(
+                        f"SQL Named parameter :{key} not found in arguments: {params}"
+                    )
 
             param = params[key]
 
@@ -74,5 +79,4 @@ class Statement:
 
         replace._placeholder = self._connection.get_driver().get_placeholder()
         replace._param_counter = 0
-
         return replace
