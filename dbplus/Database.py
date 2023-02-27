@@ -73,7 +73,7 @@ class Database(object):
         self.close()
 
     def __repr__(self):
-        return f"<DBPlus {self.db_type} database url: {db_url}), state: connected={self.is_connected()}>"
+        return f"<DBPlus {self.db_type} database url: {self.db_url}), state: connected={self.is_connected()}>"
     
     ################# Experimental feature, driver might offer extra options ############################
     def __getattr__(self, name):

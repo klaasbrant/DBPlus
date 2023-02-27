@@ -42,31 +42,37 @@ _SQL_COMMENT = re.compile(r"\s*--\s*(.*)$")
 
 
 class QueryStore(object):
-    def __init__(self, sql_path: Union[str, Path], ext: Tuple[str] = (".sql",)):
+    def __init__(
+        self,
+        sql_path: Union[str, Path],
+        ext: Tuple[str] = (".sql",),
+        prefix: Optional[bool] = False,
+    ):
+        self.query_store = {}
         path = Path(sql_path)
         if not path.exists():
-            raise SQLLoadException(f"File does not exist: {path}")
+            raise SQLLoadException(f"File/Path does not exist: {path}")
         if path.is_file():
-            query_data = self.load_query_data_from_file(path)
-            print(query_data)
+            self.load_query_data_from_file(path, prefix)
         elif path.is_dir():
-            self.query_store = self.load_query_data_from_dir_path(path, ext=ext)
+            self.load_query_data_from_dir_path(path, ext, prefix)
         else:  # pragma: no cover
             raise SQLLoadException(
-                f"The sql_path must be a directory or file, got {sql_path}"
+                f"{sql_path} is not valid for QueryStore, expecting file or path"
             )
-    
+
     def __getattr__(self, name):
         return self.query_store[name]
 
     def _make_query(
-        self, query: str, ns_parts: List[str], floc: Optional[Tuple[Path, int]] = None
+        self, query: str, floc: Optional[Tuple[Path, int]] = None, prefix: bool = False
     ) -> Query:
         lines = [line.strip() for line in query.strip().splitlines()]
         qname = self._get_name_op(lines[0])
+        if prefix:
+            qname = floc[0].stem + "_" + qname
         sql, doc = self._get_sql_doc(lines[1:])
-        query_fqn = ".".join(ns_parts + [qname])
-        return Query(query_fqn, doc, sql, floc)
+        return Query(qname, doc, sql, floc)
 
     def _get_name_op(self, text: str) -> str:
         qname_spec = text.replace("-", "_")
@@ -88,47 +94,40 @@ class QueryStore(object):
                 sql += line + " "
 
         return sql.strip(), doc.rstrip()
-
-    def load_query_data_from_sql(
-        self, sql: str, ns_parts: List[str] = [], fname: Optional[Path] = None
-    ) -> List[Query]:
-        qdefs = _QUERY_DEF.split(sql)
-        lineno = 1 + qdefs[0].count("\n")
-        data = []
-        # first item is anything before the first query definition, drop it!
-        for qdef in qdefs[1:]:
-            data.append(
-                self._make_query(qdef, ns_parts, (fname, lineno) if fname else None)
-            )
-            lineno += qdef.count("\n")
-        return data
+    
+    def _update_query_tree(self, item: Query):
+        if item.name not in self.query_store:
+            self.query_store[item.name] = item
+        else:
+            raise SQLLoadException(f"duplicate {item.name} in {item.floc}, conflict with {self.query_store[item.name].floc} ")
+            
 
     def load_query_data_from_file(
-        self, path: Path, ns_parts: List[str] = []
-    ) -> List[Query]:
-        return self.load_query_data_from_sql(path.read_text(), ns_parts, path)
+        self, fname: Path, prefix: bool = False):
+        qdefs = _QUERY_DEF.split(fname.read_text())
+        lineno = 1 + qdefs[0].count("\n")
+        # first item is anything before the first query definition, drop it!
+        for qdef in qdefs[1:]:
+            self._update_query_tree(self._make_query(qdef, (fname, lineno), prefix))
+            lineno += qdef.count("\n")
 
-    def load_query_data_from_dir_path(self, dir_path, ext=(".sql",)) -> QueryDataTree:
+    def load_query_data_from_dir_path(
+        self, dir_path, ext=(".sql",), prefix=True
+    ):
         if not dir_path.is_dir():
             raise ValueError(f"The path {dir_path} must be a directory")
 
-        def _recurse_load_query_data_tree(path, ns_parts=[], ext=(".sql",)):
-            query_data_tree = {}
+        def _recurse_load_query_data_tree(path, ext=(".sql",), prefix=False):
             for p in path.iterdir():
                 if p.is_file():
                     if p.suffix not in ext:
                         continue
-                    for query_datum in self.load_query_data_from_file(p, ns_parts):
-                        query_data_tree[query_datum.name] = query_datum
+                    self.load_query_data_from_file(p, prefix)
                 elif p.is_dir():
-                    query_data_tree[p.name] = _recurse_load_query_data_tree(
-                        p, ns_parts + [p.name], ext=ext
-                    )
+                    _recurse_load_query_data_tree(p, ext=ext, prefix=True)
                 else:  # pragma: no cover
                     # This should be practically unreachable.
                     raise SQLLoadException(
                         f"The path must be a directory or file, got {p}"
                     )
-            return query_data_tree
-
-        return _recurse_load_query_data_tree(dir_path, ext=ext)
+        _recurse_load_query_data_tree(dir_path, ext=ext, prefix=False)
