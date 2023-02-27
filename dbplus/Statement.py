@@ -1,5 +1,6 @@
 import re
 import logging
+from dbplus.QueryStore import Query
 from dbplus.helpers import _debug
 
 class Statement:
@@ -26,6 +27,8 @@ class Statement:
             yield row
 
     def execute(self, sql, *args, **kwargs):
+        if isinstance(sql,Query):
+            sql=sql.sql
         self._logger.info("--> Execute : {} / {} / {}".format(sql,args,kwargs))
 
         if self._connection.get_driver().get_placeholder() == ":":

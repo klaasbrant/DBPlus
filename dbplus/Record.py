@@ -2,14 +2,15 @@ import json
 import inspect
 from dbplus.helpers import json_handler
 
+
 class Record(object):
     """A row, from a query, from a database."""
-    __slots__ = ('_keys', '_values')
+
+    __slots__ = ("_keys", "_values")
 
     def __init__(self, row):
         self._keys = list(row.keys())
         self._values = list(row.values())
-
         # Ensure that lengths match properly.
         assert len(self._keys) == len(self._values)
 
@@ -22,7 +23,7 @@ class Record(object):
         return self._values
 
     def __repr__(self):
-        return f'<Record {format(json.dumps(self.as_dict(),default=json_handler))}>'
+        return f"<Record {format(json.dumps(self.as_dict(),default=json_handler))}>"
 
     def __getitem__(self, key):
         # Support for index-based lookup.
@@ -62,18 +63,17 @@ class Record(object):
 
     def as_tuple(self):
         return tuple(self.values())
-    
+
     def as_list(self):
         return list(self.values())
-    
+
     def as_json(self):
-        return json.dumps(self.as_dict(),indent=4, sort_keys=True, default=str)
-    
+        return json.dumps(self.as_dict(), indent=4, sort_keys=True, default=str)
+
     def as_model(self, model):
         """return the row as pydantic model"""
         if inspect.isclass(model):
-            #return model.parse_obj(self.as_dict())
+            # return model.parse_obj(self.as_dict())
             return model(**self.as_dict())
         else:
             raise ValueError("as_model excepts a class as input")
-        

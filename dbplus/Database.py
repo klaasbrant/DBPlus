@@ -18,15 +18,11 @@ class Database(object):
     def __init__(self, db_url=None, **kwargs):
         self._logger = logging.getLogger('dbplus')
         self._transaction_active = False
-        
-        # If no db_url was provided, fallback to $DATABASE_URL in environment
-        DATABASE_URL = os.environ.get('DATABASE_URL')
-        self.db_url = db_url or DATABASE_URL
-        dbParameters = None
-        if self.db_url:
-            dbParameters =_parse_database_url(db_url)
+        # If no db_url was provided, we fallback to DATABASE_URL in environment variables
+        self.db_url = db_url or os.environ.get('DATABASE_URL')
+        dbParameters =_parse_database_url(self.db_url)
         if dbParameters == None:  # that means parsing failed!!
-            raise ValueError('Database url missing or invalid')
+            raise ValueError('Database url is missing or has invalid format')
         self.db_type= dbParameters.pop('driver').upper()
         try:
             if self.db_type == 'DB2':
