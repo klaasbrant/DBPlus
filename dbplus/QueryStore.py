@@ -11,11 +11,6 @@ class Query(NamedTuple):
     floc: Optional[Tuple[Path, int]] = None
 
 
-# Can't make this a recursive type in terms of itself
-# QueryDataTree = Dict[str, Union[Query, 'QueryDataTree']]
-QueryDataTree = Dict[str, Union[Query, Dict]]
-
-
 class SQLLoadException(Exception):
     """Raised when there is a problem loading SQL content from a file or directory"""
 
@@ -23,7 +18,7 @@ class SQLLoadException(Exception):
 
 
 class SQLParseException(Exception):
-    """Raised when there was a problem parsing the aiosql comment annotations in SQL"""
+    """Raised when there was a problem parsing the annotations in SQL"""
 
     pass
 

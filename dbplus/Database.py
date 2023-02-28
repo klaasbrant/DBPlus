@@ -123,7 +123,13 @@ class Database(object):
     def callproc(self, procname, *params):
         self._logger.info(f"--> Calling Stored proc: {procname} with arguments [{str(params)}]")
         self.ensure_connected()
-        return self._driver.callproc(procname, *params)
+        result =  self._driver.callproc(procname, *params)
+        if result:
+            cursor = Statement(self)
+            cursor._cursor = result[0]
+            rows = (Record(row) for row in cursor)
+            return (RecordCollection(rows,cursor), result[1:])
+        return (None)
 
     def last_insert_id(self, seq_name=None):
         self.ensure_connected()

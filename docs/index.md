@@ -1,3 +1,5 @@
+#IMPORTANT: This software is not yet production ready and still changing a lot. Please wait until version 1!!
+
 # Introduction 
 DBPlus is a interface layer between the several python database interfaces and your program. It makes the SQL access from your program database-agnostic meaning the same code can run unmodified on several databases. All you need to change is the database URL. Of course if you use specific SQL that will only work on a certain database DBPlus can not change this.
 

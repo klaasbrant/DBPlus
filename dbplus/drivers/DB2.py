@@ -70,7 +70,11 @@ class DB2Driver(BaseDriver):
     def callproc(self, procname, *params):
         try:
             result = ibm_db.callproc(self._conn, procname, tuple(*params))
-            return list(result[1:])
+            # WTF IBM!! a method should not bring back different types!!
+            if type(result) is tuple:
+                return result
+            else:
+                return (result, ) # then make it a tuple!!
         except Exception as ex:
             self._error = ibm_db.stmt_errormsg()
             raise DBError("Error calling stored proc: {}, with parameters: {} : {}".format(procname, params,ex))
@@ -81,6 +85,7 @@ class DB2Driver(BaseDriver):
             stmt = ibm_db.prepare(self._conn, sql)
             ibm_db.execute(stmt, params)
             Statement._cursor = stmt
+            Statement._next = stmt
             return ibm_db.num_rows(stmt)
         except Exception as ex:
             self._error = ibm_db.stmt_errormsg()
@@ -105,6 +110,7 @@ class DB2Driver(BaseDriver):
         while (row):
             yield row
             row = ibm_db.fetch_assoc(Statement._cursor)
+        Statement._next = Statement._cursor # save for possible next    
         ibm_db.free_result(Statement._cursor)
         Statement._cursor = None
 
@@ -116,8 +122,15 @@ class DB2Driver(BaseDriver):
             #Statement._cursor = None
 
     @_debug()
-    def next_result(self,cursor):
-        return ibm_db.next_result(cursor)
+    def next_result(self,stmt):
+        if stmt._next:
+            try:
+                return ibm_db.next_result(stmt._next)
+            except Exception as ex:
+                self._error = ibm_db.stmt_errormsg()
+                raise DBError(f"Error executing next_result: {self._error}")
+        else:
+            return None
 
     @_debug()
     def last_insert_id(self, seq_name=None):
