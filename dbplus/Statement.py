@@ -3,6 +3,7 @@ import logging
 from dbplus.QueryStore import Query
 from dbplus.helpers import _debug
 
+
 class Statement:
     _cursor = None
 

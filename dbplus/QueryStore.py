@@ -89,16 +89,16 @@ class QueryStore(object):
                 sql += line + " "
 
         return sql.strip(), doc.rstrip()
-    
+
     def _update_query_tree(self, item: Query):
         if item.name not in self.query_store:
             self.query_store[item.name] = item
         else:
-            raise SQLLoadException(f"duplicate {item.name} in {item.floc}, conflict with {self.query_store[item.name].floc} ")
-            
+            raise SQLLoadException(
+                f"duplicate {item.name} in {item.floc}, conflict with {self.query_store[item.name].floc} "
+            )
 
-    def load_query_data_from_file(
-        self, fname: Path, prefix: bool = False):
+    def load_query_data_from_file(self, fname: Path, prefix: bool = False):
         qdefs = _QUERY_DEF.split(fname.read_text())
         lineno = 1 + qdefs[0].count("\n")
         # first item is anything before the first query definition, drop it!
@@ -106,9 +106,7 @@ class QueryStore(object):
             self._update_query_tree(self._make_query(qdef, (fname, lineno), prefix))
             lineno += qdef.count("\n")
 
-    def load_query_data_from_dir_path(
-        self, dir_path, ext=(".sql",), prefix=True
-    ):
+    def load_query_data_from_dir_path(self, dir_path, ext=(".sql",), prefix=True):
         if not dir_path.is_dir():
             raise ValueError(f"The path {dir_path} must be a directory")
 
@@ -125,4 +123,5 @@ class QueryStore(object):
                     raise SQLLoadException(
                         f"The path must be a directory or file, got {p}"
                     )
+
         _recurse_load_query_data_tree(dir_path, ext=ext, prefix=False)
