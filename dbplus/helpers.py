@@ -116,10 +116,7 @@ def debug(loggername):
     def log_():
         def wrapper(f):
             def wrapped(*args, **kargs):
-                if sys.version_info > (3, 0):
-                    func = f.__qualname__
-                else:
-                    func = ""
+                func = f.__qualname__
                 logger.debug(
                     ">>> enter {0} args: {1} - kwargs: {2}".format(
                         func, str(args[1:]), str(kargs)

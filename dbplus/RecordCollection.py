@@ -1,6 +1,9 @@
+from dbplus.Statement import Statement
 from dbplus.helpers import _reduce_datetimes
 import inspect
 from dbplus.Record import Record
+import logging
+from dbplus.helpers import _debug
 
 
 class RecordCollection(object):
@@ -11,6 +14,7 @@ class RecordCollection(object):
         self._all_rows = []
         self.pending = True
         self._cursor = cursor
+        self._logger = logging.getLogger("RecordCollection")
 
     def __repr__(self):
         return "<RecordCollection size={} pending={}>".format(len(self), self.pending)
@@ -18,6 +22,7 @@ class RecordCollection(object):
     def __str__(self):
         return self.__unicode__()
 
+    @_debug()
     def __unicode__(self):
         result = []
         data = self.all(as_tuple=True)
@@ -56,14 +61,14 @@ class RecordCollection(object):
 
     def __next__(self):
         try:
-            # print("===== in next ====")
+            #self._logger.debug("===== in next ====")
             nextrow = next(self._rows)
-            # print("======= out next: row ===>",nextrow)
+            #self._logger.debug("======= out next: row ===>",nextrow)
             self._all_rows.append(nextrow)
             return nextrow
         except StopIteration:
             self.pending = False
-            # print("==== EOF ===")
+            #self._logger.debug("==== EOF ===")
             raise StopIteration("RecordCollection contains no more rows.")
 
     def __getitem__(self, key):
@@ -108,7 +113,8 @@ class RecordCollection(object):
         return len(self._all_rows)
 
     def __del__(self):
-        self.close()
+        pass
+        #self.close()
 
     def close(self):
         if (
@@ -117,18 +123,18 @@ class RecordCollection(object):
             self._cursor.close()
 
     def next_result(self, fetchall=False):
+        self._logger.info(f"Resolving next_result {self._cursor}")
         if self._cursor:
-            new_cursor = (
-                self._cursor.next_result()
-            )  # TODO check if pending if so raise error current cursor is lost...
+            cursor = Statement(self._cursor._connection)
+            next_rs = self._cursor.next_result()  # this the old stmt
+            self._logger.info(f"got new rs from driver {next_rs}")
+            cursor._cursor = next_rs
             # Turn the cursor into RecordCollection
-            rows = (Record(row) for row in new_cursor)
-            results = RecordCollection(rows, new_cursor)
-
+            rows = (Record(row) for row in cursor)
+            results = RecordCollection(rows, cursor)
             # Fetch all results if desired otherwise we fetch when needed (open cursor can be locking problem!
             if fetchall:
                 results.all()
-
             return results
 
     def export(self, format, **kwargs):

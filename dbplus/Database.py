@@ -136,14 +136,19 @@ class Database(object):
         # Fetch all results if desired otherwise we fetch when needed (open cursor can be locking problem!
         # if fetchall:
         #    results.all()
-
+        # do not delete de cursor it is needed in the layer below
         return results
+
+
+    #########################################################################################################################
 
     def execute(self, sql, *args, **kwargs):
         self._logger.info(f"--> Execute: {sql} with arguments [{str(args)}]")
         self.ensure_connected()
-        modified = Statement(self).execute(sql, *args, **kwargs)
+        modified = Statement(self).execute(sql, *args, **kwargs) # GC will purge Statement
         return modified
+
+    #########################################################################################################################
 
     def callproc(self, procname, *params):
         self._logger.info(
@@ -155,8 +160,10 @@ class Database(object):
             cursor = Statement(self)
             cursor._cursor = result[0]
             rows = (Record(row) for row in cursor)
-            return (RecordCollection(rows, cursor), result[1:])
-        return None
+            return (RecordCollection(rows, cursor), result[1:]) #  replace stmt by recordcollection
+        return None  # can happen like proc not found or no parameter proc that returns nothing (bad practice)
+
+    #########################################################################################################################
 
     def last_insert_id(self, seq_name=None):
         self.ensure_connected()

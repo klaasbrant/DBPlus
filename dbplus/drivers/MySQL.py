@@ -14,8 +14,10 @@ class MySQLDriver(BaseDriver):
         self._params["user"] = params.pop('uid')
         self._params["password"] = params.pop('pwd')
         self._params["database"] = params.pop('database')
-        self._params["host"] = params.pop('host')
-        self._params["port"] = int(params.pop('port'))
+        self._params["host"] = params.pop('host','localhost')
+        self._port = self._params.pop("port",None)
+        if self._port is None:
+            self._port = 3306
 
     def _get_server_version_info(self):
         return getattr(self._conn, "_server_version", None)

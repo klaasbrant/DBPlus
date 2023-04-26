@@ -81,7 +81,9 @@ class DB2Driver(BaseDriver):
     @_debug()
     def callproc(self, procname, *params):
         try:
+            result = None
             result = ibm_db.callproc(self._conn, procname, tuple(*params))
+            self._logger.debug(f"call proc {procname} returned {result}")
             # WTF IBM!! a method should not bring back different types!!
             if type(result) is tuple:
                 return result
@@ -128,33 +130,36 @@ class DB2Driver(BaseDriver):
 
     @_debug()
     def iterate(self, Statement):
-        if Statement._cursor is None:
-            raise StopIteration
-        row = ibm_db.fetch_assoc(Statement._cursor)
-        while row:
-            yield row
+        try:
+            if Statement._cursor is None:
+                raise StopIteration
+            #self._logger.debug(f" >>>>>>>>   About to fetch 1st {Statement}")
             row = ibm_db.fetch_assoc(Statement._cursor)
-        Statement._next = Statement._cursor  # save for possible next
-        ibm_db.free_result(Statement._cursor)
-        Statement._cursor = None
+            while row:
+                yield row
+                row = ibm_db.fetch_assoc(Statement._cursor)
+            Statement._next = Statement._cursor  # save for possible next
+            #ibm_db.free_result(Statement._cursor)
+            Statement._cursor = None
+        except Exception as ex:
+            self._error = ibm_db.stmt_errormsg()
+            raise DBError(f"Error in iterate cursor statement {Statement} : {ibm_db.stmt_errormsg()} : {ex}")
 
     @_debug()
     def clear(self, Statement):
-        if Statement._cursor is not None:
-            pass
-            # ibm_db.free_result(Statement._cursor)
-            # Statement._cursor = None
+        # ibm_db.free_result(Statement._cursor)
+        Statement._cursor = None
 
     @_debug()
-    def next_result(self, stmt):
-        if stmt._next:
-            try:
-                return ibm_db.next_result(stmt._next)
-            except Exception as ex:
-                self._error = ibm_db.stmt_errormsg()
-                raise DBError(f"Error executing next_result: {self._error}")
-        else:
-            return None
+    def next_result(self, Statement):
+        try:
+            #self._logger.debug(f"we had a stement {Statement}, with _cursor {Statement._cursor} and _next {Statement._next}")
+            nresult = None
+            nresult = ibm_db.next_result(Statement._next)
+            return nresult
+        except Exception as ex:
+            self._error = ibm_db.stmt_errormsg()
+            raise DBError(f"Error executing next_result: {self._error}")
 
     @_debug()
     def last_insert_id(self, seq_name=None):

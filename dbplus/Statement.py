@@ -14,10 +14,15 @@ class Statement:
     def __init__(self, database):
         self._connection = database
         # self._object_name = database._driver.get_name()+'Row'
-        self._logger = logging.getLogger("dbplus")
+        self._logger = logging.getLogger("Statement")
+        self._cursor = None
+        self._next = None
 
     def __iter__(self):
         return self.iterate()
+    
+    def __repr__(self):
+        return f"<Statement {self._connection=} {self._cursor=} {self._next=} >"
 
     def close(self):
         if self._cursor is not None:
@@ -48,7 +53,10 @@ class Statement:
         return self._connection.get_driver().execute(self, sql, *params)
 
     def next_result(self):
-        self._connection.get_driver().next_result(self)
+        self._logger.info(f"--> next result {self}")
+        stmt = self._connection.get_driver().next_result(self)
+        self._logger.info(f"--> next result returns {self}")
+        return stmt
 
     def _prepare(self, params, exec_params):
         def replace(match):
