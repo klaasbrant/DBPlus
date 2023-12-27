@@ -1,24 +1,27 @@
 from __future__ import absolute_import, division, print_function, with_statement
-import psycopg2
+
 import logging
+
+import psycopg2
+
 from dbplus.drivers import BaseDriver
-from dbplus.helpers import _debug
+
 
 class PostgresDriver(BaseDriver):
     _cursor = None
     _con = None
 
-    def __init__(self, timeout=0, charset="utf8", timezone="SYSTEM",  **params):
-        #self._params = dict(charset=charset, time_zone = timezone, connect_timeout=timeout, autocommit=True)
-        #print('>>>',params)
+    def __init__(self, timeout=0, charset="utf8", timezone="SYSTEM", **params):
+        # self._params = dict(charset=charset, time_zone = timezone, connect_timeout=timeout, autocommit=True)
+        # print('>>>',params)
         self._driver = "Postgresql"
-        self._logger = logging.getLogger('dbplus')
+        self._logger = logging.getLogger("dbplus")
         self._params = params
-        self._params["user"] = params.pop('uid')
-        self._params["password"] = params.pop('pwd')
-        self._params["database"] = params.pop('database')
-        self._params["host"] = params.pop('host')
-        self._params["port"] = int(params.pop('port'))
+        self._params["user"] = params.pop("uid")
+        self._params["password"] = params.pop("pwd")
+        self._params["database"] = params.pop("database")
+        self._params["host"] = params.pop("host")
+        self._params["port"] = int(params.pop("port"))
 
     def _get_server_version_info(self):
         return getattr(self._conn, "_server_version", None)
@@ -30,13 +33,17 @@ class PostgresDriver(BaseDriver):
         return next(self.iterate())[0][1]
 
     def connect(self):
-        #self.close()
-        #self._logger.info("--> CONNECT {}".format(**self._params))
+        # self.close()
+        # self._logger.info("--> CONNECT {}".format(**self._params))
         try:
             self._conn = psycopg2.connect(**self._params)
             self._cursor = self._conn.cursor()
         except psycopg2.Error as ex:
-            raise RuntimeError('Problem connection to database {}: {}'.format(self._params["database"],ex))
+            raise RuntimeError(
+                "Problem connection to database {}: {}".format(
+                    self._params["database"], ex
+                )
+            )
 
     def close(self):
         self.clear()
@@ -44,7 +51,7 @@ class PostgresDriver(BaseDriver):
             self._conn.close()
             self._conn = None
 
-    def clear(self,Statement):
+    def clear(self, Statement):
         if self._cursor is not None:
             Statement._cursor.close()
             Statement._cursor = None
@@ -64,33 +71,38 @@ class PostgresDriver(BaseDriver):
             print(err)
             raise err
 
-    def execute_many(self,Statement, sql, params):
+    def execute_many(self, Statement, sql, params):
         try:
             Statement._cursor = self._conn.cursor()
             Statement._cursor.execute(sql, params)
             return Statement._cursor.rowcount
         except Exception as err:
             print(err)
-            raise RuntimeError("Error executing SQL: {}, with parameters: {} : {}".format(sql, params,err))     
+            raise RuntimeError(
+                "Error executing SQL: {}, with parameters: {} : {}".format(
+                    sql, params, err
+                )
+            )
 
     def iterate(self, Statement):
         if Statement._cursor is None:
             raise StopIteration
         row = self._next_row(Statement)
-        while (row):
+        while row:
             yield row
             row = self._next_row(Statement)
-        #ibm_db.free_result(Statement._cursor)
+        # ibm_db.free_result(Statement._cursor)
         Statement._cursor = None
 
-
-    def _next_row(self,Statement):
+    def _next_row(self, Statement):
         columns = [desc[0] for desc in Statement._cursor.description]
         row = Statement._cursor.fetchone()
         if row is None:
             return row
         else:
-            row = tuple([el.decode('utf-8') if type(el) is bytearray else el for el in row])
+            row = tuple(
+                [el.decode("utf-8") if type(el) is bytearray else el for el in row]
+            )
             return dict(zip(columns, row))
 
     def row_count(self):
@@ -116,7 +128,7 @@ class PostgresDriver(BaseDriver):
 
     def callproc(self, procname, *params):
         try:
-            result = self._cursor.callproc(procname,tuple(*params))
+            result = self._cursor.callproc(procname, tuple(*params))
             return list(result)
         except psycopg2.Error as err:
             print(err)

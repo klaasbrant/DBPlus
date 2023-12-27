@@ -1,7 +1,6 @@
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Sequence, Union, NamedTuple
 import re
-from enum import Enum
+from pathlib import Path
+from typing import NamedTuple, Optional, Sequence, Tuple, Union
 
 
 class Query(NamedTuple):

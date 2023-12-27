@@ -1,5 +1,4 @@
 import sqlite3
-import warnings
 
 from dbplus.drivers import BaseDriver
 
@@ -9,8 +8,8 @@ class SQLiteDriver(BaseDriver):
     _error = None
 
     def __init__(self, timeout=5.0, **params):
-        #self._logger = params.pop("logger")
-        #self._platform = SQLitePlatform(self)
+        # self._logger = params.pop("logger")
+        # self._platform = SQLitePlatform(self)
 
         auto_commit = True
         if auto_commit:
@@ -18,7 +17,7 @@ class SQLiteDriver(BaseDriver):
         else:
             params["isolation_level"] = "EXCLUSIVE"
 
-        database = params.pop('database')
+        database = params.pop("database")
         self._params = dict(database=database, timeout=timeout)
 
     def _get_server_version_info(self):
@@ -28,11 +27,11 @@ class SQLiteDriver(BaseDriver):
         return self._params["database"]
 
     @staticmethod
-    def _row_factory(cursor, row): #behold rows as dictionairies :-)
+    def _row_factory(cursor, row):  # behold rows as dictionairies :-)
         d = {}
         for idx, col in enumerate(cursor.description):
             d[col[0]] = row[idx]
-        return d    
+        return d
 
     def connect(self):
         self.close()
@@ -62,7 +61,7 @@ class SQLiteDriver(BaseDriver):
 
     def execute(self, Statement, sql, *params):
         try:
-            #self._log(sql, *params)
+            # self._log(sql, *params)
             self._error = None
             if Statement._cursor == None:
                 Statement._cursor = self._conn.cursor()
@@ -71,7 +70,11 @@ class SQLiteDriver(BaseDriver):
             return self.row_count()
         except Exception as ex:
             self._error = str(ex)
-            raise RuntimeError("Error executing SQL: {}, with parameters: {} : {}".format(sql, params,ex))
+            raise RuntimeError(
+                "Error executing SQL: {}, with parameters: {} : {}".format(
+                    sql, params, ex
+                )
+            )
 
     def iterate(self, Statement):
         if Statement._cursor is None:
@@ -92,11 +95,11 @@ class SQLiteDriver(BaseDriver):
         self._conn.execute("BEGIN TRANSACTION")
 
     def commit(self):
-        #self._log("COMMIT")
+        # self._log("COMMIT")
         self._conn.commit()
 
     def rollback(self):
-        #self._log("ROLLBACK")
+        # self._log("ROLLBACK")
         self._conn.rollback()
 
     @staticmethod
@@ -111,4 +114,3 @@ class SQLiteDriver(BaseDriver):
 
     def callproc(self, procname, *params):
         pass
-        

@@ -1,11 +1,13 @@
-import ibm_db
 import logging
-from dbplus.Statement import Statement
+
+import ibm_db
+
+from dbplus.Database import DBError
 from dbplus.drivers import BaseDriver
 from dbplus.helpers import _debug
 from dbplus.Record import Record
-from dbplus.Database import DBError
 from dbplus.RecordCollection import RecordCollection
+from dbplus.Statement import Statement
 
 
 class DB2Driver(BaseDriver):
@@ -133,17 +135,19 @@ class DB2Driver(BaseDriver):
         try:
             if Statement._cursor is None:
                 raise StopIteration
-            #self._logger.debug(f" >>>>>>>>   About to fetch 1st {Statement}")
+            # self._logger.debug(f" >>>>>>>>   About to fetch 1st {Statement}")
             row = ibm_db.fetch_assoc(Statement._cursor)
             while row:
                 yield row
                 row = ibm_db.fetch_assoc(Statement._cursor)
             Statement._next = Statement._cursor  # save for possible next
-            #ibm_db.free_result(Statement._cursor)
+            # ibm_db.free_result(Statement._cursor)
             Statement._cursor = None
         except Exception as ex:
             self._error = ibm_db.stmt_errormsg()
-            raise DBError(f"Error in iterate cursor statement {Statement} : {ibm_db.stmt_errormsg()} : {ex}")
+            raise DBError(
+                f"Error in iterate cursor statement {Statement} : {ibm_db.stmt_errormsg()} : {ex}"
+            )
 
     @_debug()
     def clear(self, Statement):
@@ -153,11 +157,11 @@ class DB2Driver(BaseDriver):
     @_debug()
     def next_result(self, Statement):
         try:
-            #self._logger.debug(f"we had a stement {Statement}, with _cursor {Statement._cursor} and _next {Statement._next}")
+            # self._logger.debug(f"we had a stement {Statement}, with _cursor {Statement._cursor} and _next {Statement._next}")
             nresult = None
             nresult = ibm_db.next_result(Statement._next)
             return nresult
-        except Exception as ex:
+        except Exception:
             self._error = ibm_db.stmt_errormsg()
             raise DBError(f"Error executing next_result: {self._error}")
 

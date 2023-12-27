@@ -1,21 +1,26 @@
 from __future__ import absolute_import, division, print_function, with_statement
+
 import mysql.connector
 from mysql.connector import errorcode
+
 from dbplus.drivers import BaseDriver
+
 
 class MySQLDriver(BaseDriver):
     _cursor = None
     _con = None
 
-    def __init__(self, timeout=0, charset="utf8", timezone="SYSTEM", port=3306, **params):
-        #self._params = dict(charset=charset, time_zone = timezone, connect_timeout=timeout, autocommit=True)
-        #print('>>>',params)
+    def __init__(
+        self, timeout=0, charset="utf8", timezone="SYSTEM", port=3306, **params
+    ):
+        # self._params = dict(charset=charset, time_zone = timezone, connect_timeout=timeout, autocommit=True)
+        # print('>>>',params)
         self._params = dict()
-        self._params["user"] = params.pop('uid')
-        self._params["password"] = params.pop('pwd')
-        self._params["database"] = params.pop('database')
-        self._params["host"] = params.pop('host','localhost')
-        self._port = self._params.pop("port",None)
+        self._params["user"] = params.pop("uid")
+        self._params["password"] = params.pop("pwd")
+        self._params["database"] = params.pop("database")
+        self._params["host"] = params.pop("host", "localhost")
+        self._port = self._params.pop("port", None)
         if self._port is None:
             self._port = 3306
 
@@ -29,7 +34,7 @@ class MySQLDriver(BaseDriver):
         return next(self.iterate())[0][1]
 
     def connect(self):
-        #self.close()
+        # self.close()
         try:
             self._conn = mysql.connector.connect(**self._params)
             self._cursor = self._conn.cursor()
@@ -40,7 +45,7 @@ class MySQLDriver(BaseDriver):
                 print("Database does not exist")
             else:
                 print(err)
-            raise err    
+            raise err
 
     def close(self):
         self.clear()
@@ -71,20 +76,21 @@ class MySQLDriver(BaseDriver):
         if Statement._cursor is None:
             raise StopIteration
         row = self._next_row(Statement)
-        while (row):
+        while row:
             yield row
             row = self._next_row(Statement)
-        #ibm_db.free_result(Statement._cursor)
+        # ibm_db.free_result(Statement._cursor)
         Statement._cursor = None
 
-
-    def _next_row(self,Statement):
+    def _next_row(self, Statement):
         columns = [desc[0] for desc in Statement._cursor.description]
         row = Statement._cursor.fetchone()
         if row is None:
             return row
         else:
-            row = tuple([el.decode('utf-8') if type(el) is bytearray else el for el in row])
+            row = tuple(
+                [el.decode("utf-8") if type(el) is bytearray else el for el in row]
+            )
             return dict(zip(columns, row))
 
     def row_count(self):
@@ -110,7 +116,7 @@ class MySQLDriver(BaseDriver):
 
     def callproc(self, procname, *params):
         try:
-            result = self._cursor.callproc(procname,tuple(*params))
+            result = self._cursor.callproc(procname, tuple(*params))
             return list(result)
         except mysql.connector.Error as err:
             print(err)
