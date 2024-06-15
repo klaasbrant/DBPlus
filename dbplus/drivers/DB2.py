@@ -219,3 +219,6 @@ class DB2Driver(BaseDriver):
 
     def get_driver(self):  # needed for the extra methods in order to close the cursor
         return self
+
+    def get_server_info(self):
+        return ibm_db.server_info(self._conn)

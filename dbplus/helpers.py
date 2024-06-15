@@ -1,10 +1,11 @@
-from inspect import isclass
-import decimal
-import sys
-import logging
-import time
-import datetime
 import ast
+import datetime
+import decimal
+import json
+import logging
+import sys
+import time
+from inspect import isclass
 
 
 def isexception(obj):
@@ -59,13 +60,17 @@ def _reduce_datetimes(row):
     return tuple(row)
 
 
-def json_handler(obj):
-    if isinstance(obj, decimal.Decimal):
-        return str(obj)
-    elif hasattr(obj, "isoformat"):
-        return obj.isoformat()
-    else:
-        return obj
+class json_handler(json.JSONEncoder):
+    # def json_handler(obj):
+    def default(self, obj):
+        print(type(obj))
+        if isinstance(obj, decimal.Decimal):
+            return obj.number()
+        elif hasattr(obj, "isoformat"):
+            return obj.isoformat()
+        else:
+            return super().default(obj)
+
     # return obj.isoformat() if hasattr(obj, 'isoformat') else obj
 
 

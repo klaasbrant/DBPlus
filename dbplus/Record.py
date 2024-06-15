@@ -1,5 +1,6 @@
-import json
 import inspect
+import json
+
 from dbplus.helpers import json_handler
 
 
@@ -23,7 +24,7 @@ class Record(object):
         return self._values
 
     def __repr__(self):
-        return f"<Record {format(json.dumps(self.as_dict(),default=json_handler))}>"
+        return f"<Record {format(json.dumps(self.as_dict(),cls=json_handler))}>"
 
     def __getitem__(self, key):
         # Support for index-based lookup.
@@ -67,8 +68,9 @@ class Record(object):
     def as_list(self):
         return list(self.values())
 
-    def as_json(self):
-        return json.dumps(self.as_dict(), indent=4, sort_keys=True, default=str)
+    def as_json(self, **kwargs):
+        return json.dumps(self.as_dict(), cls=json_handler, **kwargs)
+        # return json.dumps(self.as_dict(), indent=4, sort_keys=True, default=str)
 
     def as_model(self, model):
         """return the row as pydantic model"""

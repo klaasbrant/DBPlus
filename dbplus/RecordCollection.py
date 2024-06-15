@@ -1,9 +1,9 @@
-from dbplus.Statement import Statement
-from dbplus.helpers import _reduce_datetimes
 import inspect
-from dbplus.Record import Record
 import logging
-from dbplus.helpers import _debug
+
+from dbplus.helpers import _debug, _reduce_datetimes
+from dbplus.Record import Record
+from dbplus.Statement import Statement
 
 
 class RecordCollection(object):
@@ -61,14 +61,14 @@ class RecordCollection(object):
 
     def __next__(self):
         try:
-            #self._logger.debug("===== in next ====")
+            # self._logger.debug("===== in next ====")
             nextrow = next(self._rows)
-            #self._logger.debug("======= out next: row ===>",nextrow)
+            # self._logger.debug("======= out next: row ===>",nextrow)
             self._all_rows.append(nextrow)
             return nextrow
         except StopIteration:
             self.pending = False
-            #self._logger.debug("==== EOF ===")
+            # self._logger.debug("==== EOF ===")
             raise StopIteration("RecordCollection contains no more rows.")
 
     def __getitem__(self, key):
@@ -114,7 +114,7 @@ class RecordCollection(object):
 
     def __del__(self):
         pass
-        #self.close()
+        # self.close()
 
     def close(self):
         if (
@@ -150,17 +150,21 @@ class RecordCollection(object):
             )
         return DataFrame(data=self.all(as_dict=True))
 
-    def all(self, as_dict=False, as_tuple=False):
+    def all(self, as_dict=False, as_tuple=False, as_json=False):
         """Returns a list of all rows for the RecordCollection. If they haven't
         been fetched yet, consume the iterator and cache the results."""
 
-        # By calling list it calls the __iter__ method
+        # By calling list it calls the __iter__ method for complete set
         rows = list(self)
 
         if as_dict:
             return [r.as_dict() for r in rows]
+
         elif as_tuple:
             return [r.as_tuple() for r in rows]
+
+        elif as_json:
+            return [r.as_json() for r in rows]
 
         return rows  # list of records
 
@@ -178,34 +182,13 @@ class RecordCollection(object):
     def as_tuple(self):
         return self.all(as_tuple=True)
 
-    def one(self, default=None, as_dict=False, as_tuple=False):
-        """Returns a single record for the RecordCollection, ensuring that it
-        is the only record, or returns `default`."""
+    def as_json(self):
+        return self.all(as_json=True)
 
-        # Ensure that we don't have more than one row.
-        try:
-            test = self[1]  # force the cursor to the second rowpass
-        except:
-            pass
-
-        if len(self) > 1:
-            raise ValueError(
-                "RecordCollection contained more than one row. "
-                "Expects only one row when using "
-                "RecordCollection.one"
-            )
-
+    def one(self, default=None):
+        """Returns a single record from the RecordCollection, ensuring there is data else returns `default`."""
         # Try to get a record, or return default.
-        if len(self) == 0:  # bummer, no rows at all
-            return default
-        record = self[0]
-        # Cast and return.
-        if as_dict:
-            return record.as_dict()
-        elif as_tuple:
-            return record.as_tuple()
-        else:
-            return record
+        return self[0] if self[0] else default
 
     def scalar(self, default=None):
         """Returns the first column of the first row, or `default`."""
