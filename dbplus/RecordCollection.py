@@ -188,9 +188,14 @@ class RecordCollection(object):
     def one(self, default=None):
         """Returns a single record from the RecordCollection, ensuring there is data else returns `default`."""
         # Try to get a record, or return default.
-        return self[0] if self[0] else default
+        try:
+            return self[0]
+        except:
+            return default
 
     def scalar(self, default=None):
         """Returns the first column of the first row, or `default`."""
-        row = self.one()
-        return row[0] if row else default
+        try:
+            return self[0][0]
+        except:
+            return default
