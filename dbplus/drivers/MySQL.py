@@ -1,12 +1,10 @@
-from __future__ import absolute_import, division, print_function, with_statement
-
 import mysql.connector
 from mysql.connector import errorcode
 
 from dbplus.drivers import BaseDriver
 
 
-class MySQLDriver(BaseDriver):
+class DBDriver(BaseDriver):
     _cursor = None
     _con = None
 

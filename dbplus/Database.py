@@ -1,18 +1,19 @@
+import csv
 import logging
 import os
-import csv
+from contextlib import contextmanager
+from importlib import import_module
+
+from dbplus.helpers import (
+    _debug,
+    _parse_database_url,
+    _reduce_datetimes,
+    fix_sql_type,
+    guess_type,
+)
 from dbplus.Record import Record
 from dbplus.RecordCollection import RecordCollection
 from dbplus.Statement import Statement
-from dbplus.helpers import (
-    _parse_database_url,
-    guess_type,
-    fix_sql_type,
-    _reduce_datetimes,
-)
-from contextlib import contextmanager
-from dbplus.helpers import _debug
-from importlib import import_module
 
 
 class DBError(Exception):
@@ -20,59 +21,29 @@ class DBError(Exception):
 
 
 class Database(object):
-    """A Database connection."""
+    """A generic Database connection."""
 
     def __init__(self, db_url=None, **kwargs):
         self._logger = logging.getLogger("dbplus")
         self._transaction_active = False
+        self._transactioncontext_active = False
+        self._driver = None
         # If no db_url was provided, we fallback to DATABASE_URL in environment variables
         self.db_url = db_url or os.environ.get("DATABASE_URL")
         dbParameters = _parse_database_url(self.db_url)
-        if dbParameters == None:  # that means parsing failed!!
+        if dbParameters is None:  # that means parsing failed!!
             raise ValueError("Database url is missing or has invalid format")
-        self.db_type = dbParameters.pop("driver").upper()
+        self.db_driver = dbParameters.pop("driver").upper()
         try:
-            if self.db_type == "DB2":
-                from dbplus.drivers import DB2
+            driver_module = import_module(f"dbplus.drivers.{self.db_driver}")
+            self._driver = driver_module.DBDriver(**dbParameters)
+            self._logger.info(f"--> Using Database driver: {self.db_driver}")
+            self.open()
+            self._logger.info(f"--> Database connected")
 
-                self._driver = DB2.DB2Driver(
-                    **dbParameters
-                )  # and of to the races with DB2!
-            elif self.db_type == "MYSQL":
-                from dbplus.drivers import MySQL
-
-                self._driver = MySQL.MySQLDriver(
-                    **dbParameters
-                )  # and of to the races with MySQL!
-            elif self.db_type == "SQLITE":
-                from dbplus.drivers import SQLite
-
-                self._driver = SQLite.SQLiteDriver(
-                    **dbParameters
-                )  # and of to the races with SQLite!
-            elif self.db_type == "ORACLE":
-                from dbplus.drivers import Oracle
-
-                self._driver = Oracle.OracleDriver(
-                    **dbParameters
-                )  # and of to the races with Oracle!
-            elif self.db_type == "POSTGRES":
-                from dbplus.drivers import Postgres
-
-                self._driver = Postgres.PostgresDriver(
-                    **dbParameters
-                )  # and of to the races with Oracle!
-            else:  # add new drivers here
-                raise ValueError(f"DBPlus has no driver for: {self.db_type}")
-
-            self._logger.info("--> Using Database driver: {self.db_type}")
-            if kwargs.pop("open", True):
-                self.open()
-                if not self.is_connected():
-                    raise ValueError("DBPlus cannot establish database connection")
         except:
             raise ValueError(
-                f"DBPlus has trouble initializing the {self.db_type.lower()} driver... mission aborted!"
+                f"DBPlus has trouble initializing the {self.db_driver} driver... mission aborted!"
             )
 
     def open(self):
@@ -86,9 +57,12 @@ class Database(object):
             self._driver.close()
 
     def __del__(self):
-        if hasattr(self, "_driver"):
-            # self._driver.close() # Say goodbye and
-            del self._driver  # allow database interface to gracefully exit
+        if self._driver is not None:
+            try:
+                self._driver.close()  # Say goodbye and
+                del self._driver  # allow database interface to gracefully exit
+            except:
+                pass
 
     def __enter__(self):
         return self
@@ -139,13 +113,14 @@ class Database(object):
         # do not delete de cursor it is needed in the layer below
         return results
 
-
     #########################################################################################################################
 
     def execute(self, sql, *args, **kwargs):
         self._logger.info(f"--> Execute: {sql} with arguments [{str(args)}]")
         self.ensure_connected()
-        modified = Statement(self).execute(sql, *args, **kwargs) # GC will purge Statement
+        modified = Statement(self).execute(
+            sql, *args, **kwargs
+        )  # GC will purge Statement
         return modified
 
     #########################################################################################################################
@@ -160,7 +135,10 @@ class Database(object):
             cursor = Statement(self)
             cursor._cursor = result[0]
             rows = (Record(row) for row in cursor)
-            return (RecordCollection(rows, cursor), result[1:]) #  replace stmt by recordcollection
+            return (
+                RecordCollection(rows, cursor),
+                result[1:],
+            )  #  replace stmt by recordcollection
         return None  # can happen like proc not found or no parameter proc that returns nothing (bad practice)
 
     #########################################################################################################################
@@ -183,15 +161,18 @@ class Database(object):
     def transaction(self):
         """Returns with block for transaction. Call ``commit`` or ``rollback`` at end as appropriate."""
         self._logger.info("--> Begin transaction block")
+        self._transactioncontext_active = True
         self.begin_transaction()
         try:
             yield
+            self._transactioncontext_active = False
             self.commit()
             self._logger.info("--> Transaction committed")
         except Exception as ex:
             self._logger.info("--> Transaction rollback because failure in transaction")
+            self._transactioncontext_active = False
             self.rollback()
-            raise ex
+            raise ex  # allow exception to propagate, but transaction has been aborted
 
     def begin_transaction(self):
         self.ensure_connected()
@@ -201,15 +182,21 @@ class Database(object):
         self._driver.begin_transaction()
 
     def commit(self):
+        if self._transactioncontext_active:
+            raise DBError("Logic error: Commit not allowed within transaction block!")
         if self._transaction_active == False:
-            raise DBError("Commit on never started transaction?")
+            raise DBError("logic error: Commit on never started transaction?")
         self.ensure_connected()
         self._driver.commit()
         self._transaction_active = False
 
     def rollback(self):
+        if self._transactioncontext_active:
+            raise DBError(
+                "Rollback called within transaction block, forcing DBError..."
+            )
         if self._transaction_active == False:
-            raise DBError("Rollback on never started transaction?")
+            raise DBError("logic error: Rollback on never started transaction?")
         self.ensure_connected()
         self._transaction_active = False
         self._driver.rollback()
@@ -224,7 +211,7 @@ class Database(object):
         file,
         table,
         sep="\t",
-        null="\\x00",
+        null="\x00",
         columns=None,
         header=False,
         append=False,
@@ -268,7 +255,7 @@ class Database(object):
         sep="\t",
         recsep="\n",
         header=False,
-        null="\\x00",
+        null="\x00",
         batch=500,
         columns=None,
         **kwargs,

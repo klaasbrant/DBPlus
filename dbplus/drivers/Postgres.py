@@ -7,7 +7,7 @@ import psycopg2
 from dbplus.drivers import BaseDriver
 
 
-class PostgresDriver(BaseDriver):
+class DBDriver(BaseDriver):
     _cursor = None
     _con = None
 

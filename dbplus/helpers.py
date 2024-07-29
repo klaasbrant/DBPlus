@@ -82,7 +82,7 @@ def _parse_database_url(name):
 
     pattern = re.compile(
         r"""
-            (?P<driver>[\w\+]+)://
+            (?P<driver>[\w]+(?::[\w]+)?)://
             (?:
                 (?P<uid>[^:/]*)
                 (?::(?P<pwd>.*))?

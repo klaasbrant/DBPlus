@@ -7,7 +7,7 @@ import cx_Oracle
 from dbplus.drivers import BaseDriver
 
 
-class OracleDriver(BaseDriver):
+class DBDriver(BaseDriver):
     def __init__(self, timeout=0, charset="utf8", timezone="SYSTEM", **params):
         # self._params = dict(charset=charset, time_zone = timezone, connect_timeout=timeout, autocommit=True)
         self._logger = logging.getLogger("dbplus")

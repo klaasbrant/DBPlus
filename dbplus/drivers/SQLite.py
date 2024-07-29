@@ -3,7 +3,7 @@ import sqlite3
 from dbplus.drivers import BaseDriver
 
 
-class SQLiteDriver(BaseDriver):
+class DBDriver(BaseDriver):
     _cursor = None
     _error = None
 
