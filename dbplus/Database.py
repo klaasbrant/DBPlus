@@ -100,12 +100,14 @@ class Database(object):
         iterated over to get result rows as dictionaries.
         """
         self.ensure_connected()
-        cursor = Statement(self)
-        cursor.execute(query, *args, **kwargs)
+        stmt = Statement(self)
+        stmt.execute(query, *args, **kwargs)
 
         # Turn the cursor into RecordCollection
-        rows = (Record(row) for row in cursor)
-        results = RecordCollection(rows, cursor)
+        rows = (Record(row) for row in stmt)
+        results = RecordCollection(
+            rows, stmt
+        )  # Make sure we save the stmt to make fetching and other things possible
 
         # Fetch all results if desired otherwise we fetch when needed (open cursor can be locking problem!
         # if fetchall:

@@ -51,10 +51,10 @@ class DBDriver(BaseDriver):
             self._conn.close()
             self._conn = None
 
-    def clear(self, Statement):
+    def clear(self):
         if self._cursor is not None:
-            Statement._cursor.close()
-            Statement._cursor = None
+            self._cursor.close()
+            self._cursor = None
 
     def error_code(self):
         return self._conn.errno()

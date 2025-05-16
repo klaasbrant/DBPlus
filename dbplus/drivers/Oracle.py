@@ -2,9 +2,12 @@ from __future__ import absolute_import, division, print_function, with_statement
 
 import logging
 
-import cx_Oracle
+import oracledb as ora
 
+from dbplus.Database import DBError
 from dbplus.drivers import BaseDriver
+
+# import cx_Oracle as ora
 
 
 class DBDriver(BaseDriver):
@@ -12,28 +15,29 @@ class DBDriver(BaseDriver):
         # self._params = dict(charset=charset, time_zone = timezone, connect_timeout=timeout, autocommit=True)
         self._logger = logging.getLogger("dbplus")
         self._logger.info("Oracle init params {}".format(params))
-        self._params = dict()
-        self._params["user"] = params.pop("uid")
-        self._params["password"] = params.pop("pwd")
-        self._params["database"] = params.pop("database")
-        self._params["host"] = params.pop("host")
-        self._params["port"] = int(params.pop("port"))
+        self._uid = params.pop("uid")
+        self._pwd = params.pop("pwd")
+        self._database = params.pop("database")
+        self._host = params.pop("host", "localhost")
+        self._port = int(params.pop("port", 1521))
+        self._dsn = f"{self._host}:{self._port}/{self._database}"
+        # self._dsn = ora.makedsn(
+        #     self._host, self._port, self._database
+        # )  # this fails? DPY-6003: SID "freepdb1" is not registered with the listener at host "localhost" port 1521. (Similar to ORA-12505)
 
     def connect(self):
-        # self.close()
         try:
-            dsn = cx_Oracle.makedsn(
-                self._params["host"], self._params["port"], sid=self._params["database"]
-            )
-            self._logger.info("Oracle connect dsn={}".format(dsn))
-            self._conn = cx_Oracle.connect(
-                user=self._params["user"], password=self._params["password"], dsn=dsn
+            self._logger.info(f"Oracle connect {self._dsn=}")
+            self._conn = ora.connect(
+                user=self._uid,
+                password=self._pwd,
+                dsn=self._dsn,
             )
             self._cursor = self._conn.cursor()
             self._logger.info("Connect OK!")
         except Exception as ex:
-            print("BUMMER")
-            raise ex
+            print("Problems connecting to Oracle: {}".format(str(ex)))
+            raise ex from None
 
     def close(self):
         if self._conn is not None:
@@ -52,23 +56,22 @@ class DBDriver(BaseDriver):
             result = _cursor.callproc(procname, tuple(*params))
             return list(result[0:])
         except Exception as ex:
-            raise RuntimeError(
+            raise DBError(
                 "Error calling stored proc: {}, with parameters: {} \n{}".format(
                     procname, params, str(ex)
                 )
-            )
+            ) from None
 
     def execute(self, Statement, sql, **kwargs):
         self._logger.info("Oracle execute sql: {} params {}".format(sql, kwargs))
         try:
             Statement._cursor = self._conn.cursor()
-            return Statement._cursor.execute(sql, kwargs)
+            Statement._cursor.execute(sql, kwargs)
+            return Statement._cursor.rowcount
         except Exception as ex:
-            raise RuntimeError(
-                "Error executing SQL: {}, with parameters: {} \n{}".format(
-                    sql, kwargs, str(ex)
-                )
-            )
+            raise DBError(
+                f"Error executing SQL: {sql}, with parameters: {kwargs}\n{str(ex)}"
+            ) from None
 
     def iterate(self, Statement):
         if Statement._cursor is None:
@@ -93,31 +96,31 @@ class DBDriver(BaseDriver):
             )
             return dict(zip(columns, row))
 
-    def clear(self, Statement):
-        if Statement._cursor is not None:
-            # pass
-            # cx_Oracle.free_result(Statement._cursor)
-            Statement._cursor = None
+    def clear(self):
+        if self._cursor is not None:
+            # ora.free_result(...)
+            self._cursor.close()
+            self._cursor = None
 
     def next_result(self, cursor):
-        return cx_Oracle.next_result(cursor)
+        return ora.next_result(cursor)
 
     def last_insert_id(self, seq_name=None):
         pass
 
     def begin_transaction(self):
         self._logger.debug(">>> START TRX")
-        cx_Oracle.autocommit(self._conn, cx_Oracle.SQL_AUTOCOMMIT_OFF)
+        ora.autocommit(self._conn, ora.SQL_AUTOCOMMIT_OFF)
 
     def commit(self):
         self._logger.debug("<<< COMMIT")
-        cx_Oracle.commit(self._conn)
-        cx_Oracle.autocommit(self._conn, cx_Oracle.SQL_AUTOCOMMIT_ON)
+        ora.commit(self._conn)
+        ora.autocommit(self._conn, ora.SQL_AUTOCOMMIT_ON)
 
     def rollback(self):
         self._logger.debug(">>> ROLLBACK")
-        cx_Oracle.rollback(self._conn)
-        cx_Oracle.autocommit(self._conn, cx_Oracle.SQL_AUTOCOMMIT_ON)
+        ora.rollback(self._conn)
+        ora.autocommit(self._conn, ora.SQL_AUTOCOMMIT_ON)
 
     def get_placeholder(self):
         return ":"

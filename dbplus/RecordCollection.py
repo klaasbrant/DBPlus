@@ -9,11 +9,11 @@ from dbplus.Statement import Statement
 class RecordCollection(object):
     """A set of excellent rows from a query."""
 
-    def __init__(self, rows, cursor):
+    def __init__(self, rows, stmt):
         self._rows = rows
         self._all_rows = []
         self.pending = True
-        self._cursor = cursor
+        self._stmt = stmt
         self._logger = logging.getLogger("RecordCollection")
 
     def __repr__(self):
@@ -118,20 +118,20 @@ class RecordCollection(object):
 
     def close(self):
         if (
-            self._cursor and self.pending
+            self._stmt and self.pending
         ):  # if we have a cursor and cursor is not yet auto closed
-            self._cursor.close()
+            self._stmt.close()
 
     def next_result(self, fetchall=False):
-        self._logger.info(f"Resolving next_result {self._cursor}")
-        if self._cursor:
-            cursor = Statement(self._cursor._connection)
-            next_rs = self._cursor.next_result()  # this the old stmt
+        self._logger.info(f"Resolving next_result {self._stmt}")
+        if self._stmt:
+            Stmt = Statement(self._stmt._connection)
+            next_rs = self._stmt.next_result()  # this the old stmt
             self._logger.info(f"got new rs from driver {next_rs}")
-            cursor._cursor = next_rs
+            Stmt._cursor = next_rs
             # Turn the cursor into RecordCollection
-            rows = (Record(row) for row in cursor)
-            results = RecordCollection(rows, cursor)
+            rows = (Record(row) for row in Stmt)
+            results = RecordCollection(rows, Stmt)
             # Fetch all results if desired otherwise we fetch when needed (open cursor can be locking problem!
             if fetchall:
                 results.all()
@@ -199,3 +199,7 @@ class RecordCollection(object):
             return self[0][0]
         except:
             return default
+
+    @property
+    def description(self):
+        return self._stmt.description()

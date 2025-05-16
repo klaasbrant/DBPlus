@@ -11,6 +11,7 @@ class Record(object):
 
     def __init__(self, row):
         self._keys = list(row.keys())
+        # self._keys = [key.upper() for key in row.keys()]
         self._values = list(row.values())
         # Ensure that lengths match properly.
         assert len(self._keys) == len(self._values)

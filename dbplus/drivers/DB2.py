@@ -64,7 +64,7 @@ class DBDriver(BaseDriver):
             self._error = ibm_db.conn_errormsg()
             raise DBError(
                 "Problem connection to database {} : {}".format(self._database, ex)
-            )
+            ) from None
 
     @_debug()
     def close(self):
@@ -97,7 +97,7 @@ class DBDriver(BaseDriver):
                 "Error calling stored proc: {}, with parameters: {} : {}".format(
                     procname, params, ex
                 )
-            )
+            ) from None
 
     @_debug()
     def execute(self, Statement, sql, *params):
@@ -113,7 +113,7 @@ class DBDriver(BaseDriver):
                 "Error executing SQL: {}, with parameters: {} : {}".format(
                     sql, params, ex
                 )
-            )
+            ) from None
 
     @_debug()
     def execute_many(self, Statement, sql, params):
@@ -128,7 +128,7 @@ class DBDriver(BaseDriver):
                 "Error executing SQL: {}, with parameters: {} : {}".format(
                     sql, params, ex
                 )
-            )
+            ) from None
 
     @_debug()
     def iterate(self, Statement):
@@ -147,12 +147,14 @@ class DBDriver(BaseDriver):
             self._error = ibm_db.stmt_errormsg()
             raise DBError(
                 f"Error in iterate cursor statement {Statement} : {ibm_db.stmt_errormsg()} : {ex}"
-            )
+            ) from None
 
     @_debug()
-    def clear(self, Statement):
+    def clear(self):
         # ibm_db.free_result(Statement._cursor)
-        Statement._cursor = None
+        if self._cursor is not None:
+            self._cursor.close()
+            self._cursor = None
 
     @_debug()
     def next_result(self, Statement):
@@ -163,7 +165,7 @@ class DBDriver(BaseDriver):
             return nresult
         except Exception:
             self._error = ibm_db.stmt_errormsg()
-            raise DBError(f"Error executing next_result: {self._error}")
+            raise DBError(f"Error executing next_result: {self._error}") from None
 
     @_debug()
     def last_insert_id(self, seq_name=None):
@@ -179,7 +181,9 @@ class DBDriver(BaseDriver):
                 identity_val = None
         except Exception as ex:
             self._error = ibm_db.stmt_errormsg()
-            raise DBError("Error retrieving identity_val_local() : {}".format(ex))
+            raise DBError(
+                "Error retrieving identity_val_local() : {}".format(ex)
+            ) from None
         return identity_val
 
     @_debug()
@@ -223,3 +227,19 @@ class DBDriver(BaseDriver):
     @_debug()
     def get_server_info(self):
         return ibm_db.server_info(self._conn)
+
+    def describe_cursor(self, stmt):
+        cols = []
+        for i in range(0, ibm_db.num_fields(stmt)):
+            cols.append(
+                [
+                    ibm_db.field_name(stmt, i),
+                    ibm_db.field_type(stmt, i),
+                    ibm_db.field_display_size(stmt, i),
+                    None,
+                    ibm_db.field_precision(stmt, i),
+                    ibm_db.field_scale(stmt, i),
+                    ibm_db.field_nullable(stmt, i),
+                ]
+            )
+        return cols

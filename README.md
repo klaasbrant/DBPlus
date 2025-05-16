@@ -14,7 +14,7 @@ From github: Clone the repository using git and issue "pip install ."
 - Oracle: CX_Oracle
 - Postgresql: psycopg2 
 
-Documentation : https://klaasbrant.github.io/DBPlus/ [![Documentation Status](https://klaasbrant.github.io/DBPlus/)](https://klaasbrant.github.io/DBPlus/)
+Documentation : https://klaasbrant.github.io/DBPlus/ 
 
 ## Example
 

@@ -1,7 +1,8 @@
-import re
 import logging
-from dbplus.QueryStore import Query
+import re
+
 from dbplus.helpers import _debug
+from dbplus.QueryStore import Query
 
 
 class Statement:
@@ -20,7 +21,7 @@ class Statement:
 
     def __iter__(self):
         return self.iterate()
-    
+
     def __repr__(self):
         return f"<Statement {self._connection=} {self._cursor=} {self._next=} >"
 
@@ -89,3 +90,6 @@ class Statement:
         replace._placeholder = self._connection.get_driver().get_placeholder()
         replace._param_counter = 0
         return replace
+
+    def description(self):
+        return self._connection.get_driver().describe_cursor(self._cursor)
