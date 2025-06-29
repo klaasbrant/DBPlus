@@ -8,7 +8,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name="DBPlus",
-    version="0.4.2",
+    version="0.4.5",
     description="Database-agnostic SQL Interface for Postresql, MySQL, SQLite, DB2 and more",
     url="https://github.com/klaasbrant/DBPlus",
     author="Klaas Brant",
