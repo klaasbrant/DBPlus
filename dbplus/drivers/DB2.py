@@ -1,4 +1,23 @@
 import logging
+import os
+import site
+
+# The problem is unique to windows see https://github.com/ibmdb/python-ibmdb/issues/887
+if os.name == "nt":
+    # Get the filepath from either the environment variable IBM_DB_HOME or the site-packages directory
+    if (fp := os.environ.get("IBM_DB_HOME")) or any(
+        os.path.exists((fp := os.path.join(site_packages, "clidriver")))
+        for site_packages in site.getsitepackages()
+    ):
+        if os.path.exists(fp := os.path.join(fp, "bin")):
+            os.add_dll_directory(fp)
+        else:
+            raise FileNotFoundError(
+                "clidriver/bin folder not found, you cannot use ibm_db"
+            )
+
+    else:
+        raise FileNotFoundError("clidriver folder not found, you cannot use ibm_db")
 
 import ibm_db
 
