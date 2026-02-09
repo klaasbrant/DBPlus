@@ -1,98 +1,73 @@
-#IMPORTANT: This software is not yet production ready and still changing a lot. Please wait until version 1!!
+# DBPlus
 
-# Introduction 
-DBPlus is a interface layer between the several python database interfaces and your program. It makes the SQL access from your program database-agnostic meaning the same code can run unmodified on several databases. All you need to change is the database URL. Of course if you use specific SQL that will only work on a certain database DBPlus cannot change this.
+**A database-agnostic Python library for unified SQL access.**
 
-## Installation
-The latest stable release from pypi: pip install dbplus
+DBPlus is an interface layer between the several Python database interfaces and your program. It makes SQL access from your program database-agnostic, meaning the same code can run unmodified on several databases. All you need to change is the database URL.
 
-From github: Clone the repository using git and issue "pip install ."
+!!! warning
+    This software is not yet production ready and still changing. Please wait until version 1.0 for production use.
 
-*Please note* that DBPlus requires you to install the clients and their pre-req's:
+## Supported Databases
 
-- DB2: ibm_db
-- SQLite: builtin into python (no client required)
-- MySQL: Mysql Connector
-- Oracle: CX_Oracle
-- Postgresql: psycopg2 
+| Database   | Driver Package          | URL Scheme   |
+|------------|-------------------------|--------------|
+| SQLite     | Built-in (no install)   | `sqlite`     |
+| PostgreSQL | `psycopg2`              | `postgres`   |
+| MySQL      | `mysql-connector-python` | `mysql`     |
+| Oracle     | `oracledb`              | `oracle`     |
+| IBM DB2    | `ibm_db`                | `db2`        |
 
-Documentation : https://klaasbrant.github.io/DBPlus/ 
-
-## Example
+## Quick Start
 
 ```python
 from dbplus import Database
 
-# Examples of database urls
+# Connect to a database
+db = Database('sqlite:///mydata.db')
 
-#db = Database('SQLite:///test.db')  # driver included in python
-#db = Database('Postgres://<user>:<password>@127.0.0.1:5432/dvdrental') # requires psycopg2
-#db = Database('MySQL://<user>:<password>@127.0.0.1:3306/test') # requires Mysql Connector
-#db = Database('Oracle://<user>:<password>@127.0.0.1:1521/xe') # requires CX_Oracle
+# Query with named parameters
+rows = db.query('SELECT * FROM users WHERE age > :age', age=21)
+for row in rows:
+    print(row.name, row.age)
 
-db = Database('DB2://db2demo:demodb2@192.168.1.222:50000/sample') # requires ibm_db
+# Execute statements (INSERT, UPDATE, DELETE)
+affected = db.execute('UPDATE users SET active = ? WHERE id = ?', 1, 42)
 
-# Using named variables in query
-
-rows = db.query('select * from klaas.emp where edlevel=:edlevel and workdept=:wd',edlevel=18,wd='A00')
-print(rows,'\n')
-print('rows[1]={}\n'.format(rows[1]))
-df=rows.as_DataFrame()
-print('csv to stdout, check the many options with dataframes!  \n',df.to_csv())
-
-# Full transaction support
-
+# Transactions
 with db.transaction():
-    # DELETE
-    num = db.execute('DELETE FROM klaas.texample')
-    print('Rows deleted from klaas.texample={} \n'.format(num))
-    # INSERT
-    for i in range(1, 11):
-        db.execute('INSERT INTO klaas.texample VALUES (?,?)', i, i)
-    # UPDATE
-    num = db.execute('UPDATE klaas.texample SET col2 = col2+100  WHERE col1 > ?', 5)
-    print ('Rows updated in klaas.texample={} \n'.format(num))
-
-# transaction is now commited
-
-print(db.query('select * from klaas.texample'))
-
+    db.execute('INSERT INTO orders VALUES (?, ?)', 1, 'Widget')
+    db.execute('UPDATE inventory SET qty = qty - 1 WHERE item = ?', 'Widget')
 ```
 
-Output from example above:
+## Key Features
 
-| empno | firstnme  | midinit | lastname  | workdept | phoneno | hiredate   | job      | edlevel | sex  | birthdate  | salary    | bonus   | comm    |
-| ------- | --------- | ------- | --------- | -------- | ------- | ---------- | -------- | ------- | ---- | ---------- | --------- | ------- | ------- |
-| 000010  | CHRISTINE | I       | HAAS      | A00      | 3978    | 1995-01-01 | PRES     | 18      | F    | 1963-08-24 | 152750.00 | 1000.00 | 4220.00 |
-| 200010  | DIAN      | J       | HEMMINGER | A00      | 3978    | 1995-01-01 | SALESREP | 18      | F    | 1973-08-14 | 46500.00  | 1000.00 | 4220.00 |
+- **Database-agnostic** - Write SQL once, run on any supported database
+- **Unified parameter binding** - Use `:named` or `?` positional parameters on all databases
+- **Lazy result sets** - Rows are fetched on demand, not all at once
+- **Rich record access** - Access columns by name, index, or attribute
+- **Transaction support** - Context manager with automatic commit/rollback
+- **Pandas integration** - Convert results directly to DataFrames
+- **Pydantic support** - Map rows to Pydantic models
+- **CSV import/export** - Bulk data transfer with `copy_to` and `copy_from`
+- **SQL file management** - Load named queries from `.sql` files with QueryStore
 
-rows[1]=<Record {"empno": "200010", "firstnme": "DIAN", "midinit": "J", "lastname": "HEMMINGER", "workdept": "A00", "phoneno": "3978", "hiredate": "1995-01-01", "job": "SALESREP", "edlevel": 18, "sex": "F", "birthdate": "1973-08-14", "salary": "46500.00", "bonus": "1000.00", "comm": "4220.00"}>
+## Example with Output
 
-csv to stdout, check the many options with dataframes!
- ,birthdate,bonus,comm,edlevel,empno,firstnme,hiredate,job,lastname,midinit,phoneno,salary,sex,workdept
-0,1963-08-24,1000.00,4220.00,18,000010,CHRISTINE,1995-01-01,PRES    ,HAAS,I,3978,152750.00,F,A00
-1,1973-08-14,1000.00,4220.00,18,200010,DIAN,1995-01-01,SALESREP,HEMMINGER,J,3978,46500.00,F,A00
+```python
+from dbplus import Database
 
-Rows deleted from klaas.texample=10
+db = Database('DB2://db2demo:demodb2@192.168.1.222:50000/sample')
 
-Rows updated in klaas.texample=5
+rows = db.query(
+    'SELECT * FROM emp WHERE edlevel=:edlevel AND workdept=:wd',
+    edlevel=18, wd='A00'
+)
+print(rows)
+```
 
-| col1 | col2 |
-| ---- | ---- |
-| 1    | 1    |
-| 2    | 2    |
-| 3    | 3    |
-| 4    | 4    |
-| 5    | 5    |
-| 6    | 106  |
-| 7    | 107  |
-| 8    | 108  |
-| 9    | 109  |
-| 10   | 110  |
+Output:
 
-
-
-## What's next?
-- Add tests / bug fixing
-- Add more documentation / examples
-- more cool stuff and of course your suggestions are welcome
+| empno  | firstnme  | midinit | lastname  | workdept | phoneno | hiredate   | job      | edlevel | sex | birthdate  | salary    | bonus   | comm    |
+|--------|-----------|---------|-----------|----------|---------|------------|----------|---------|-----|------------|-----------|---------|---------|
+| 000010 | CHRISTINE | I       | HAAS      | A00      | 3978    | 1995-01-01 | PRES     | 18      | F   | 1963-08-24 | 152750.00 | 1000.00 | 4220.00 |
+| 200010 | DIAN      | J       | HEMMINGER | A00      | 3978    | 1995-01-01 | SALESREP | 18      | F   | 1973-08-14 | 46500.00  | 1000.00 | 4220.00 |
