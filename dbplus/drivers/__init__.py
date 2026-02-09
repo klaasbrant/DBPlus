@@ -1,7 +1,6 @@
 from abc import ABCMeta, abstractmethod
 
-class BaseDriver:
-    __metaclass__ = ABCMeta
+class BaseDriver(metaclass=ABCMeta):
 
     _server_version_info = None
 

@@ -56,7 +56,10 @@ class QueryStore(object):
             )
 
     def __getattr__(self, name):
-        return self.query_store[name]
+        try:
+            return self.query_store[name]
+        except KeyError:
+            raise AttributeError(f"QueryStore has no query named '{name}'")
 
     def _make_query(
         self, query: str, floc: Optional[Tuple[Path, int]] = None, prefix: bool = False

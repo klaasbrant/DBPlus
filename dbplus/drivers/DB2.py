@@ -76,7 +76,9 @@ class DBDriver(BaseDriver):
             ibm_db.ATTR_CASE: ibm_db.CASE_LOWER,
             ibm_db.SQL_ATTR_AUTOCOMMIT: ibm_db.SQL_AUTOCOMMIT_ON,
         }
-        self._logger.info("--> PCONNECT {} - {}".format(self._conn_string, options))
+        import re
+        masked_conn = re.sub(r'(UID=|PWD=)[^;]*', r'\1***', self._conn_string, flags=re.IGNORECASE)
+        self._logger.info("--> PCONNECT {} - {}".format(masked_conn, options))
         try:
             self._conn = ibm_db.pconnect(self._conn_string, "", "", options)
         except Exception as ex:

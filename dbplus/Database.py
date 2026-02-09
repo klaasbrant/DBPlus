@@ -8,6 +8,7 @@ from dbplus.helpers import (
     _debug,
     _parse_database_url,
     _reduce_datetimes,
+    _validate_identifier,
     fix_sql_type,
     guess_type,
 )
@@ -41,10 +42,10 @@ class Database(object):
             self.open()
             self._logger.info(f"--> Database connected")
 
-        except:
+        except Exception as e:
             raise ValueError(
-                f"DBPlus has trouble initializing the {self.db_driver} driver... mission aborted!"
-            )
+                f"DBPlus has trouble initializing the {self.db_driver} driver: {e}"
+            ) from e
 
     def open(self):
         """Opens the connection to the Database."""
@@ -61,7 +62,7 @@ class Database(object):
             try:
                 self._driver.close()  # Say goodbye and
                 del self._driver  # allow database interface to gracefully exit
-            except:
+            except Exception:
                 pass
 
     def __enter__(self):
@@ -71,15 +72,13 @@ class Database(object):
         self.close()
 
     def __repr__(self):
-        return f"<DBPlus {self.db_type} database url: {self.db_url}), state: connected={self.is_connected()}>"
+        return f"<DBPlus {self.db_driver} database url: {self.db_url}), state: connected={self.is_connected()}>"
 
     ################# Experimental feature, driver might offer extra options ############################
     def __getattr__(self, name):
-        def method(*args, **kw):
-            if hasattr(self._driver, name) and callable(getattr(self._driver, name)):
-                return getattr(self._driver, name)(*args, **kw)
-
-        return method
+        if self._driver is not None and hasattr(self._driver, name) and callable(getattr(self._driver, name)):
+            return getattr(self._driver, name)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def get_driver(self):
         return self._driver
@@ -159,7 +158,7 @@ class Database(object):
 
     #########################################################################################################################
 
-    @contextmanager
+    @contextmanager   # with...
     def transaction(self):
         """Returns with block for transaction. Call ``commit`` or ``rollback`` at end as appropriate."""
         self._logger.info("--> Begin transaction block")
@@ -167,7 +166,7 @@ class Database(object):
         self.begin_transaction()
         try:
             yield
-            self._transactioncontext_active = False
+            self._transactioncontext_active = False  # We return here when with block ends
             self.commit()
             self._logger.info("--> Transaction committed")
         except Exception as ex:
@@ -220,7 +219,11 @@ class Database(object):
         recsep="\n",
         **kwargs,
     ):
-        col = "*" if columns == None else ",".join(columns)
+        _validate_identifier(table)
+        if columns is not None:
+            for c in columns:
+                _validate_identifier(c)
+        col = "*" if columns is None else ",".join(columns)
         sql_query = "select {} from {}".format(col, table)
         cursor = Statement(self)
         cursor.execute(sql_query)
@@ -231,7 +234,6 @@ class Database(object):
                 row_count += 1
                 if row_count == 1:
                     csv_columns = row.keys()
-                    # csv_columns = [each_column_name.upper() for each_column_name in csv_columns]
                     writer = csv.DictWriter(
                         csvfile,
                         fieldnames=csv_columns,
@@ -244,10 +246,11 @@ class Database(object):
                     if header:
                         writer.writeheader()
 
-                for key in row.keys():
-                    if row[key] == None:
-                        row[key] = null
-                writer.writerow(row)
+                row_copy = dict(row)
+                for key in row_copy.keys():
+                    if row_copy[key] is None:
+                        row_copy[key] = null
+                writer.writerow(row_copy)
         return row_count
 
     def copy_from(
@@ -262,7 +265,11 @@ class Database(object):
         columns=None,
         **kwargs,
     ):
-        col = "" if columns == None else "({})".format(",".join(columns))
+        _validate_identifier(table)
+        if columns is not None:
+            for c in columns:
+                _validate_identifier(c)
+        col = "" if columns is None else "({})".format(",".join(columns))
         row_count = 0
         queue = list()
         # values = list()
@@ -289,6 +296,7 @@ class Database(object):
         return row_count
 
     def _insert_values(self, table, col, queue):
+        _validate_identifier(table)
         values_literal = "({})".format(
             ",".join([self.get_driver().get_placeholder()] * len(queue[0]))
         )

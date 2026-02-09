@@ -4,21 +4,23 @@ from dbplus.drivers import BaseDriver
 
 
 class DBDriver(BaseDriver):
-    _cursor = None
-    _error = None
-
     def __init__(self, timeout=5.0, **params):
-        # self._logger = params.pop("logger")
-        # self._platform = SQLitePlatform(self)
+        self._cursor = None
+        self._error = None
+        self._in_transaction = False
 
-        auto_commit = True
+        auto_commit = params.pop("auto_commit", True)
         if auto_commit:
             params["isolation_level"] = None
         else:
             params["isolation_level"] = "EXCLUSIVE"
 
         database = params.pop("database")
-        self._params = dict(database=database, timeout=timeout)
+        uid = params.pop("uid", None)
+        pwd = params.pop("pwd", None)
+        port = params.pop("port", None)
+        host = params.pop("host", None)
+        self._params = dict(database=database, timeout=timeout) | params
 
     def _get_server_version_info(self):
         return sqlite3.sqlite_version_info
@@ -61,13 +63,31 @@ class DBDriver(BaseDriver):
 
     def execute(self, Statement, sql, *params):
         try:
-            # self._log(sql, *params)
             self._error = None
-            if Statement._cursor == None:
+            if Statement._cursor is None:
                 Statement._cursor = self._conn.cursor()
             Statement._cursor = self._conn.execute(sql, params)
-            self._conn.commit()
+            self._cursor = Statement._cursor
+            if not self._in_transaction:
+                self._conn.commit()
             return self.row_count()
+        except Exception as ex:
+            self._error = str(ex)
+            raise RuntimeError(
+                "Error executing SQL: {}, with parameters: {} : {}".format(
+                    sql, params, ex
+                )
+            )
+
+    def execute_many(self, Statement, sql, params):
+        try:
+            self._error = None
+            Statement._cursor = self._conn.cursor()
+            Statement._cursor.executemany(sql, params)
+            self._cursor = Statement._cursor
+            if not self._in_transaction:
+                self._conn.commit()
+            return Statement._cursor.rowcount
         except Exception as ex:
             self._error = str(ex)
             raise RuntimeError(
@@ -86,21 +106,26 @@ class DBDriver(BaseDriver):
         self.clear()
 
     def row_count(self):
-        return getattr(self._cursor, "rowcount", 0)
+        if self._cursor is not None:
+            return self._cursor.rowcount
+        return 0
 
     def last_insert_id(self, seq_name=None):
-        return getattr(self._cursor, "lastrowid", None)
+        if self._cursor is not None:
+            return self._cursor.lastrowid
+        return None
 
     def begin_transaction(self):
+        self._in_transaction = True
         self._conn.execute("BEGIN TRANSACTION")
 
     def commit(self):
-        # self._log("COMMIT")
         self._conn.commit()
+        self._in_transaction = False
 
     def rollback(self):
-        # self._log("ROLLBACK")
         self._conn.rollback()
+        self._in_transaction = False
 
     @staticmethod
     def get_placeholder():
@@ -114,3 +139,6 @@ class DBDriver(BaseDriver):
 
     def callproc(self, procname, *params):
         pass
+
+    def describe_cursor(self, stmt):
+        return stmt.description

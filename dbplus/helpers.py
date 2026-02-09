@@ -37,8 +37,7 @@ def guess_type(x):
 
 
 def fix_sql_type(x, null):
-    x = null if x == null else x
-    return x
+    return None if x == null else x
 
 
 def is_number(s):
@@ -61,11 +60,9 @@ def _reduce_datetimes(row):
 
 
 class json_handler(json.JSONEncoder):
-    # def json_handler(obj):
     def default(self, obj):
-        print(type(obj))
         if isinstance(obj, decimal.Decimal):
-            return obj.number()
+            return float(obj)
         elif hasattr(obj, "isoformat"):
             return obj.isoformat()
         else:
@@ -77,7 +74,16 @@ class json_handler(json.JSONEncoder):
 # Parsing code is simplified version from SQLAlchemy
 
 
+def _validate_identifier(name):
+    """Validate a SQL identifier (table/column name) to prevent injection."""
+    import re
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_.]*$', name):
+        raise ValueError(f"Invalid SQL identifier: {name!r}")
+
+
 def _parse_database_url(name):
+    if name is None:
+        return None
     import re
 
     pattern = re.compile(

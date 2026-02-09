@@ -12,15 +12,16 @@ from dbplus.drivers import BaseDriver
 
 class DBDriver(BaseDriver):
     def __init__(self, timeout=0, charset="utf8", timezone="SYSTEM", **params):
-        # self._params = dict(charset=charset, time_zone = timezone, connect_timeout=timeout, autocommit=True)
         self._logger = logging.getLogger("dbplus")
-        self._logger.info("Oracle init params {}".format(params))
+        self._cursor = None
+        self._conn = None
         self._uid = params.pop("uid")
         self._pwd = params.pop("pwd")
         self._database = params.pop("database")
         self._host = params.pop("host", "localhost")
         self._port = int(params.pop("port", 1521))
         self._dsn = f"{self._host}:{self._port}/{self._database}"
+        self._logger.info("Oracle init dsn=%s", self._dsn)
         # self._dsn = ora.makedsn(
         #     self._host, self._port, self._database
         # )  # this fails? DPY-6003: SID "freepdb1" is not registered with the listener at host "localhost" port 1521. (Similar to ORA-12505)
@@ -36,7 +37,7 @@ class DBDriver(BaseDriver):
             self._cursor = self._conn.cursor()
             self._logger.info("Connect OK!")
         except Exception as ex:
-            print("Problems connecting to Oracle: {}".format(str(ex)))
+            self._logger.error("Problems connecting to Oracle: %s", ex)
             raise ex from None
 
     def close(self):
@@ -81,7 +82,6 @@ class DBDriver(BaseDriver):
             self._logger.info("Oracle next row: {} ".format(row))
             yield row
             row = self._next_row(Statement)
-        # ibm_db.free_result(Statement._cursor)
         self._logger.info("Oracle no next row")
         Statement._cursor = None
 
@@ -103,27 +103,42 @@ class DBDriver(BaseDriver):
             self._cursor = None
 
     def next_result(self, cursor):
-        return ora.next_result(cursor)
+        raise NotImplementedError("next_result is not supported for Oracle")
 
     def last_insert_id(self, seq_name=None):
         pass
 
     def begin_transaction(self):
         self._logger.debug(">>> START TRX")
-        ora.autocommit(self._conn, ora.SQL_AUTOCOMMIT_OFF)
+        self._conn.autocommit = False
 
     def commit(self):
         self._logger.debug("<<< COMMIT")
-        ora.commit(self._conn)
-        ora.autocommit(self._conn, ora.SQL_AUTOCOMMIT_ON)
+        self._conn.commit()
+        self._conn.autocommit = True
 
     def rollback(self):
         self._logger.debug(">>> ROLLBACK")
-        ora.rollback(self._conn)
-        ora.autocommit(self._conn, ora.SQL_AUTOCOMMIT_ON)
+        self._conn.rollback()
+        self._conn.autocommit = True
 
     def get_placeholder(self):
         return ":"
 
     def get_name(self):
-        return self._driver
+        return "oracle"
+
+    def execute_many(self, Statement, sql, params):
+        try:
+            Statement._cursor = self._conn.cursor()
+            Statement._cursor.executemany(sql, params)
+            return Statement._cursor.rowcount
+        except Exception as ex:
+            raise DBError(
+                f"Error executing SQL: {sql}, with parameters: {params}\n{str(ex)}"
+            ) from None
+
+    def describe_cursor(self, stmt):
+        if stmt._cursor and stmt._cursor.description:
+            return stmt._cursor.description
+        return None

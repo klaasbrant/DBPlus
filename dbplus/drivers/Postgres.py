@@ -8,12 +8,11 @@ from dbplus.drivers import BaseDriver
 
 
 class DBDriver(BaseDriver):
-    _cursor = None
-    _con = None
-
     def __init__(self, timeout=0, charset="utf8", timezone="SYSTEM", **params):
-        # self._params = dict(charset=charset, time_zone = timezone, connect_timeout=timeout, autocommit=True)
-        # print('>>>',params)
+        self._cursor = None
+        self._conn = None
+        self._error = None
+        self._last_cursor = None
         self._driver = "Postgresql"
         self._logger = logging.getLogger("dbplus")
         self._params = params
@@ -28,9 +27,8 @@ class DBDriver(BaseDriver):
 
     def get_database(self):
         if "database" in self._params:
-            return self._params["db"]
-        self.execute("SELECT DATABASE()")
-        return next(self.iterate())[0][1]
+            return self._params["database"]
+        return None
 
     def connect(self):
         # self.close()
@@ -57,27 +55,33 @@ class DBDriver(BaseDriver):
             self._cursor = None
 
     def error_code(self):
-        return self._conn.errno()
+        return 1 if self._error else 0
 
     def error_info(self):
-        return self._conn.error()
+        return self._error
 
     def execute(self, Statement, sql, *params):
         try:
+            self._error = None
             Statement._cursor = self._conn.cursor()
             Statement._cursor.execute(sql, params)
+            self._last_cursor = Statement._cursor
             return Statement._cursor.rowcount
         except Exception as err:
-            print(err)
+            self._error = str(err)
+            self._logger.error("Error executing SQL: %s", err)
             raise err
 
     def execute_many(self, Statement, sql, params):
         try:
+            self._error = None
             Statement._cursor = self._conn.cursor()
-            Statement._cursor.execute(sql, params)
+            Statement._cursor.executemany(sql, params)
+            self._last_cursor = Statement._cursor
             return Statement._cursor.rowcount
         except Exception as err:
-            print(err)
+            self._error = str(err)
+            self._logger.error("Error executing SQL: %s", err)
             raise RuntimeError(
                 "Error executing SQL: {}, with parameters: {} : {}".format(
                     sql, params, err
@@ -91,7 +95,6 @@ class DBDriver(BaseDriver):
         while row:
             yield row
             row = self._next_row(Statement)
-        # ibm_db.free_result(Statement._cursor)
         Statement._cursor = None
 
     def _next_row(self, Statement):
@@ -106,12 +109,22 @@ class DBDriver(BaseDriver):
             return dict(zip(columns, row))
 
     def row_count(self):
-        return self._conn.affected_rows()
+        if self._last_cursor is not None:
+            return self._last_cursor.rowcount
+        return 0
 
     def last_insert_id(self, seq_name=None):
-        return self._conn.insert_id() or None
+        if seq_name and self._conn:
+            cursor = self._conn.cursor()
+            cursor.execute("SELECT currval(%s)", (seq_name,))
+            return cursor.fetchone()[0]
+        if self._last_cursor is not None:
+            return getattr(self._last_cursor, "lastrowid", None)
+        return None
 
     def begin_transaction(self):
+        if self._cursor is None:
+            self._cursor = self._conn.cursor()
         self._cursor.execute("START TRANSACTION")
 
     def commit(self):
@@ -131,8 +144,17 @@ class DBDriver(BaseDriver):
             result = self._cursor.callproc(procname, tuple(*params))
             return list(result)
         except psycopg2.Error as err:
-            print(err)
+            self._error = str(err)
+            self._logger.error("Error calling stored proc %s: %s", procname, err)
             raise err
+
+    def describe_cursor(self, stmt):
+        if stmt._cursor and stmt._cursor.description:
+            return stmt._cursor.description
+        return None
+
+    def next_result(self, cursor):
+        raise NotImplementedError("next_result is not supported for PostgreSQL")
 
     def get_placeholder(self):
         return "%s"

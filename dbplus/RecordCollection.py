@@ -1,7 +1,7 @@
 import inspect
 import logging
 
-from dbplus.helpers import _debug, _reduce_datetimes
+from dbplus.helpers import _debug
 from dbplus.Record import Record
 from dbplus.Statement import Statement
 
@@ -124,6 +124,8 @@ class RecordCollection(object):
 
     def next_result(self, fetchall=False):
         self._logger.info(f"Resolving next_result {self._stmt}")
+        if self._stmt is None:
+            raise RuntimeError("Cannot call next_result: no active statement")
         if self._stmt:
             Stmt = Statement(self._stmt._connection)
             next_rs = self._stmt.next_result()  # this the old stmt
@@ -190,15 +192,17 @@ class RecordCollection(object):
         # Try to get a record, or return default.
         try:
             return self[0]
-        except:
+        except Exception:
             return default
 
     def scalar(self, default=None):
         """Returns the first column of the first row, or `default`."""
         try:
             return self[0][0]
-        except:
+        except Exception:
             return default
+        finally:
+            self.close()
 
     @property
     def description(self):

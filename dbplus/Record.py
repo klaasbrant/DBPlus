@@ -13,8 +13,10 @@ class Record(object):
         self._keys = list(row.keys())
         # self._keys = [key.upper() for key in row.keys()]
         self._values = list(row.values())
-        # Ensure that lengths match properly.
-        assert len(self._keys) == len(self._values)
+        if len(self._keys) != len(self._values):
+            raise ValueError(
+                f"Record keys ({len(self._keys)}) and values ({len(self._values)}) length mismatch"
+            )
 
     def keys(self):
         """Returns the list of column names from the query."""
