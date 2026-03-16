@@ -163,7 +163,14 @@ class Database(object):
         """Returns with block for transaction. Call ``commit`` or ``rollback`` at end as appropriate."""
         self._logger.info("--> Begin transaction block")
         self._transactioncontext_active = True
-        self.begin_transaction()
+        try:
+            self.begin_transaction()
+        except Exception:
+            # begin_transaction() failed before the try/yield block was entered,
+            # so reset the flag here — otherwise it stays True permanently and
+            # every subsequent call raises "Nested transactions is not supported!"
+            self._transactioncontext_active = False
+            raise
         try:
             yield
             self._transactioncontext_active = False  # We return here when with block ends
@@ -180,7 +187,13 @@ class Database(object):
         if self._transaction_active == True:
             raise DBError("Nested transactions is not supported!")
         self._transaction_active = True
-        self._driver.begin_transaction()
+        try:
+            self._driver.begin_transaction()
+        except Exception:
+            # Driver call failed after we set the flag — reset it so the next
+            # call to begin_transaction() is not permanently blocked.
+            self._transaction_active = False
+            raise
 
     def commit(self):
         if self._transactioncontext_active:
