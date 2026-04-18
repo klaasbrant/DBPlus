@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 DBPlus is a Python database abstraction library providing a unified API across five database backends: SQLite, PostgreSQL, MySQL, Oracle, and DB2. The same application code runs unmodified on any supported database by changing only the connection URL.
 
-**Current version:** 0.4.7 (pre-production, targeting 1.0)
+**Current version:** 0.8.0 (pre-production, targeting 1.0)
 
 ## Setup & Installation
 
@@ -24,18 +24,39 @@ No runtime dependencies are required. Database drivers are optional, installed p
 
 ## Running Tests
 
-Tests are standalone scripts in `kbtest/` that require actual database connections (no mocking framework). They manipulate `sys.path` to import from the local source tree.
+### Automated test suite (pytest)
+
+The primary test suite lives in `tests/` and requires no external database connections. It uses SQLite in-memory as the backend and covers the full public API.
+
+```bash
+pip install -e ".[dev]"          # Install with dev dependencies (pytest)
+pytest                           # Run all tests
+pytest -v                        # Verbose output
+pytest tests/test_record.py      # Run a single file
+```
+
+Test files and what they cover:
+
+| File | Coverage |
+|------|----------|
+| `tests/test_record.py` | `Record` — all access patterns, conversions, JSON serialization |
+| `tests/test_record_collection.py` | `RecordCollection` — iteration, slicing, formatting, conversions |
+| `tests/test_helpers.py` | URL parsing, identifier validation, type guessing, JSON encoder |
+| `tests/test_query_store.py` | `QueryStore` — file/directory loading, attribute access, error cases |
+| `tests/test_database.py` | `Database` — connection, query, execute, error handling, driver delegation |
+| `tests/test_transactions.py` | Full transaction lifecycle — commit, rollback, state checks, error cases |
+| `tests/test_copy.py` | `copy_to` / `copy_from` — TSV export/import, headers, NULL handling |
+
+### Legacy manual scripts (require live database connections)
 
 ```bash
 python kbtest/testsqlite.py      # SQLite tests (needs a Chinook.db file)
-python kbtest/mastertest.py      # Comprehensive integration tests
+python kbtest/mastertest.py      # Comprehensive DB2 integration tests
 python kbtest/postgrestest.py    # PostgreSQL tests
 python kbtest/mysql_test.py      # MySQL tests
 python kbtest/oracletest.py      # Oracle tests
 python kbtest/testdb2.py         # DB2 tests
 ```
-
-There is no pytest/unittest harness. Each test file runs directly with Python.
 
 ## CI/CD
 
