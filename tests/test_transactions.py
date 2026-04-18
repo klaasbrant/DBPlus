@@ -1,23 +1,33 @@
 import pytest
 
 from dbplus import Database, DBError
+from tests.conftest import DATABASE_URL, _drop
 
 
 @pytest.fixture
 def tdb():
-    """Fresh in-memory SQLite database for each transaction test."""
-    database = Database("sqlite:///:memory:")
-    database.execute(
-        "CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT NOT NULL)"
-    )
+    """Fresh items table per test, using DATABASE_URL (env or SQLite fallback)."""
+    database = Database(DATABASE_URL)
+    _drop(database, "items")
+    with database.transaction():
+        database.execute(
+            """
+            CREATE TABLE items (
+                id    INTEGER NOT NULL,
+                value VARCHAR(100) NOT NULL,
+                PRIMARY KEY (id)
+            )
+            """
+        )
     yield database
+    _drop(database, "items")
     database.close()
 
 
 class TestTransactionContextManager:
     def test_commit_makes_rows_visible(self, tdb):
         with tdb.transaction():
-            tdb.execute("INSERT INTO items (value) VALUES ('committed')")
+            tdb.execute("INSERT INTO items VALUES (1, 'committed')")
         rows = tdb.query("SELECT * FROM items").all()
         assert len(rows) == 1
         assert rows[0]["value"] == "committed"
@@ -25,7 +35,7 @@ class TestTransactionContextManager:
     def test_exception_rolls_back_rows(self, tdb):
         with pytest.raises(ValueError):
             with tdb.transaction():
-                tdb.execute("INSERT INTO items (value) VALUES ('will_rollback')")
+                tdb.execute("INSERT INTO items VALUES (1, 'will_rollback')")
                 raise ValueError("intentional failure")
         rows = tdb.query("SELECT * FROM items").all()
         assert len(rows) == 0
@@ -38,24 +48,22 @@ class TestTransactionContextManager:
 
     def test_transaction_inactive_after_block(self, tdb):
         with tdb.transaction():
-            tdb.execute("INSERT INTO items (value) VALUES ('x')")
+            tdb.execute("INSERT INTO items VALUES (1, 'x')")
         assert tdb.is_transaction_active() is False
 
 
 class TestManualTransaction:
     def test_begin_commit(self, tdb):
         tdb.begin_transaction()
-        tdb.execute("INSERT INTO items (value) VALUES ('manual')")
+        tdb.execute("INSERT INTO items VALUES (1, 'manual')")
         tdb.commit()
-        rows = tdb.query("SELECT * FROM items").all()
-        assert len(rows) == 1
+        assert len(tdb.query("SELECT * FROM items").all()) == 1
 
     def test_begin_rollback(self, tdb):
         tdb.begin_transaction()
-        tdb.execute("INSERT INTO items (value) VALUES ('will_rollback')")
+        tdb.execute("INSERT INTO items VALUES (1, 'will_rollback')")
         tdb.rollback()
-        rows = tdb.query("SELECT * FROM items").all()
-        assert len(rows) == 0
+        assert len(tdb.query("SELECT * FROM items").all()) == 0
 
     def test_is_active_true_after_begin(self, tdb):
         tdb.begin_transaction()
@@ -91,11 +99,11 @@ class TestTransactionErrors:
     def test_manual_commit_inside_context_raises(self, tdb):
         with pytest.raises(DBError):
             with tdb.transaction():
-                tdb.execute("INSERT INTO items (value) VALUES ('x')")
+                tdb.execute("INSERT INTO items VALUES (1, 'x')")
                 tdb.commit()
 
     def test_manual_rollback_inside_context_raises(self, tdb):
         with pytest.raises(DBError):
             with tdb.transaction():
-                tdb.execute("INSERT INTO items (value) VALUES ('x')")
+                tdb.execute("INSERT INTO items VALUES (1, 'x')")
                 tdb.rollback()

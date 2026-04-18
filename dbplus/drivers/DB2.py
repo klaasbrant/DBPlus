@@ -194,7 +194,7 @@ class DBDriver(BaseDriver):
     @_debug()
     def last_insert_id(self, seq_name=None):
         # Code like in ibm_dbi
-        operation = "values(IDENTITY_VAL_LOCAL()) FROM SYSIBM.SYSDUMMY1"
+        operation = "SELECT IDENTITY_VAL_LOCAL() FROM SYSIBM.SYSDUMMY1"
         try:
             stmt_handler = ibm_db.prepare(self._conn, operation)
             ibm_db.execute(stmt_handler)

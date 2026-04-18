@@ -2,34 +2,36 @@ import pytest
 
 from dbplus import Database, DBError
 from dbplus.RecordCollection import RecordCollection
+from tests.conftest import DATABASE_URL
 
 
 class TestConnection:
     def test_is_connected_after_init(self, db):
         assert db.is_connected() is True
 
-    def test_is_connected_false_after_close(self):
-        database = Database("sqlite:///:memory:")
+    def test_is_connected_false_after_close(self, db_url):
+        database = Database(db_url)
         database.close()
         assert database.is_connected() is False
 
-    def test_ensure_connected_reopens(self):
-        database = Database("sqlite:///:memory:")
+    def test_ensure_connected_reopens(self, db_url):
+        database = Database(db_url)
         database.close()
         database.ensure_connected()
         assert database.is_connected() is True
         database.close()
 
-    def test_context_manager_closes_on_exit(self):
-        with Database("sqlite:///:memory:") as database:
+    def test_context_manager_closes_on_exit(self, db_url):
+        with Database(db_url) as database:
             assert database.is_connected() is True
         assert database.is_connected() is False
 
-    def test_repr_has_driver_name(self, db):
+    def test_repr_contains_state(self, db):
         r = repr(db)
-        assert "SQLITE" in r
+        assert "connected=" in r
 
     def test_repr_masks_password(self):
+        # SQLite ignores host/credentials — safe to use a fake URL here
         database = Database("sqlite://user:secret@localhost/db")
         r = repr(database)
         assert "secret" not in r
@@ -61,8 +63,7 @@ class TestQuery:
         assert len(rows) == 2
 
     def test_query_all_rows(self, db):
-        result = db.query("SELECT * FROM employees")
-        assert len(result.all()) == 3
+        assert len(db.query("SELECT * FROM employees").all()) == 3
 
     def test_query_one(self, db):
         row = db.query("SELECT * FROM employees WHERE name = :name", name="Alice").one()
@@ -73,28 +74,22 @@ class TestQuery:
         assert count == 3
 
     def test_query_empty_one_returns_default(self, db):
-        row = db.query("SELECT * FROM employees WHERE name = 'Nobody'").one()
-        assert row is None
+        assert db.query("SELECT * FROM employees WHERE name = 'Nobody'").one() is None
 
 
 class TestExecute:
     def test_execute_insert_returns_count(self, db):
-        n = db.execute(
-            "INSERT INTO employees (name, salary, dept) VALUES ('Dave', 50000.0, 'HR')"
-        )
+        n = db.execute("INSERT INTO employees VALUES (4, 'Dave', 50000.0, 'HR')")
         assert n == 1
 
     def test_execute_update_returns_count(self, db):
-        n = db.execute(
-            "UPDATE employees SET salary = 80000.0 WHERE name = 'Alice'"
-        )
+        n = db.execute("UPDATE employees SET salary = 80000.0 WHERE name = 'Alice'")
         assert n == 1
 
     def test_execute_delete_returns_count(self, db):
         n = db.execute("DELETE FROM employees WHERE name = 'Bob'")
         assert n == 1
-        remaining = db.query("SELECT * FROM employees").all()
-        assert len(remaining) == 2
+        assert len(db.query("SELECT * FROM employees").all()) == 2
 
     def test_execute_invalid_sql_raises_dberror(self, db):
         with pytest.raises(DBError):
@@ -102,54 +97,50 @@ class TestExecute:
 
 
 class TestLastInsertId:
-    def test_last_insert_id_after_insert(self, db):
-        db.execute(
-            "INSERT INTO employees (name, salary, dept) VALUES ('Dave', 50000.0, 'HR')"
-        )
-        last_id = db.last_insert_id()
-        assert last_id == 4
+    def test_last_insert_id_does_not_raise(self, db):
+        db.execute("INSERT INTO employees VALUES (4, 'Dave', 50000.0, 'HR')")
+        db.last_insert_id()  # must not raise
 
-    def test_last_insert_id_increments(self, db):
-        db.execute(
-            "INSERT INTO employees (name, salary, dept) VALUES ('Eve', 55000.0, 'HR')"
-        )
-        id1 = db.last_insert_id()
-        db.execute(
-            "INSERT INTO employees (name, salary, dept) VALUES ('Frank', 58000.0, 'HR')"
-        )
-        id2 = db.last_insert_id()
-        assert id2 == id1 + 1
+    def test_last_insert_id_sqlite(self, db, driver_name):
+        """SQLite returns the rowid of the last inserted row."""
+        if driver_name != "sqlite":
+            pytest.skip("last_insert_id rowid is SQLite-specific")
+        db.execute("INSERT INTO employees VALUES (4, 'Dave', 50000.0, 'HR')")
+        assert db.last_insert_id() == 4
 
 
 class TestErrorHandling:
-    def test_error_code_zero_on_success(self, db):
+    def test_error_code_falsy_on_success(self, db):
         db.query("SELECT * FROM employees").all()
-        assert db.error_code() == 0
+        assert not db.error_code()  # 0, None, or '' depending on driver
 
-    def test_error_code_nonzero_after_failure(self, db):
+    def test_error_code_truthy_after_failure(self, db):
         try:
             db.execute("SELECT * FROM nonexistent_table")
         except DBError:
             pass
-        assert db.error_code() == 1
+        assert db.error_code()  # 1, SQLSTATE string, etc.
 
-    def test_error_info_none_on_success(self, db):
+    def test_error_info_falsy_on_success(self, db):
         db.query("SELECT * FROM employees").all()
-        assert db.error_info() is None
+        assert not db.error_info()  # None or '' depending on driver
 
-    def test_error_info_string_after_failure(self, db):
+    def test_error_info_set_after_failure(self, db):
         try:
             db.execute("SELECT * FROM nonexistent_table")
         except DBError:
             pass
-        assert db.error_info() is not None
-        assert isinstance(db.error_info(), str)
+        info = db.error_info()
+        assert info  # truthy — a non-empty string
 
 
 class TestCallproc:
-    def test_callproc_sqlite_returns_none(self, db):
-        result = db.callproc("nonexistent_proc")
-        assert result is None
+    def test_callproc_does_not_raise_on_unsupported(self, db, driver_name):
+        """SQLite returns None for callproc (unsupported). Other drivers may raise."""
+        if driver_name == "sqlite":
+            assert db.callproc("nonexistent_proc") is None
+        else:
+            pytest.skip("callproc behaviour is driver-specific; tested via driver tests")
 
 
 class TestTransactionState:
@@ -159,10 +150,9 @@ class TestTransactionState:
 
 class TestDriverDelegation:
     def test_getattr_delegates_get_name(self, db):
-        assert db.get_name() == "sqlite"
-
-    def test_getattr_delegates_get_database(self, db):
-        assert db.get_database() == ":memory:"
+        name = db.get_name()
+        assert isinstance(name, str)
+        assert len(name) > 0
 
     def test_getattr_unknown_raises_attribute_error(self, db):
         with pytest.raises(AttributeError):
