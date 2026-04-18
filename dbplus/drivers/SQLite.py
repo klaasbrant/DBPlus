@@ -1,5 +1,6 @@
 import sqlite3
 
+from dbplus.errors import DBError
 from dbplus.drivers import BaseDriver
 
 
@@ -50,9 +51,6 @@ class DBDriver(BaseDriver):
             self._conn = None
 
     def clear(self):
-        # if self._cursor is not None:
-        #     self._cursor.close()
-        #     self._cursor = None
         pass
 
     def error_code(self):
@@ -61,46 +59,46 @@ class DBDriver(BaseDriver):
     def error_info(self):
         return self._error
 
-    def execute(self, Statement, sql, *params):
+    def execute(self, statement, sql, *params):
         try:
             self._error = None
-            if Statement._cursor is None:
-                Statement._cursor = self._conn.cursor()
-            Statement._cursor = self._conn.execute(sql, params)
-            self._cursor = Statement._cursor
+            if statement._cursor is None:
+                statement._cursor = self._conn.cursor()
+            statement._cursor = self._conn.execute(sql, params)
+            self._cursor = statement._cursor
             if not self._in_transaction:
                 self._conn.commit()
             return self.row_count()
         except Exception as ex:
             self._error = str(ex)
-            raise RuntimeError(
+            raise DBError(
                 "Error executing SQL: {}, with parameters: {} : {}".format(
                     sql, params, ex
                 )
             )
 
-    def execute_many(self, Statement, sql, params):
+    def execute_many(self, statement, sql, params):
         try:
             self._error = None
-            Statement._cursor = self._conn.cursor()
-            Statement._cursor.executemany(sql, params)
-            self._cursor = Statement._cursor
+            statement._cursor = self._conn.cursor()
+            statement._cursor.executemany(sql, params)
+            self._cursor = statement._cursor
             if not self._in_transaction:
                 self._conn.commit()
-            return Statement._cursor.rowcount
+            return statement._cursor.rowcount
         except Exception as ex:
             self._error = str(ex)
-            raise RuntimeError(
+            raise DBError(
                 "Error executing SQL: {}, with parameters: {} : {}".format(
                     sql, params, ex
                 )
             )
 
-    def iterate(self, Statement):
-        if Statement._cursor is None:
+    def iterate(self, statement):
+        if statement._cursor is None:
             raise StopIteration
 
-        for row in Statement._cursor:
+        for row in statement._cursor:
             yield row
 
         self.clear()

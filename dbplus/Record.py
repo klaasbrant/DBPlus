@@ -1,84 +1,82 @@
+from __future__ import annotations
+
 import inspect
 import json
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 from dbplus.helpers import json_handler
 
 
-class Record(object):
+class Record:
     """A row, from a query, from a database."""
 
-    __slots__ = ("_keys", "_values")
+    __slots__ = ("_keys", "_values", "_dict")
 
-    def __init__(self, row):
+    def __init__(self, row: Dict[str, Any]) -> None:
         self._keys = list(row.keys())
-        # self._keys = [key.upper() for key in row.keys()]
         self._values = list(row.values())
         if len(self._keys) != len(self._values):
             raise ValueError(
                 f"Record keys ({len(self._keys)}) and values ({len(self._values)}) length mismatch"
             )
+        self._dict = dict(zip(self._keys, self._values))
 
-    def keys(self):
+    def keys(self) -> List[str]:
         """Returns the list of column names from the query."""
         return self._keys
 
-    def values(self):
+    def values(self) -> List[Any]:
         """Returns the list of values from the query."""
         return self._values
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<Record {format(json.dumps(self.as_dict(),cls=json_handler))}>"
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Union[int, str]) -> Any:
         # Support for index-based lookup.
         if isinstance(key, int):
-            return self.values()[key]
+            return self._values[key]
 
         # Support for string-based lookup.
-        if key in self.keys():
-            i = self.keys().index(key)
-            return self.values()[i]
+        try:
+            return self._dict[key]
+        except KeyError:
+            raise KeyError(f"Record does not contain '{key}' field.")
 
-        raise KeyError(f"Record does not contains '{key}' field.")
-
-    def __getattr__(self, key):
+    def __getattr__(self, key: str) -> Any:
         try:
             return self[key]
         except KeyError as e:
             raise AttributeError(e)
 
-    def __dir__(self):
+    def __dir__(self) -> List[str]:
         standard = dir(super(Record, self))
         # Merge standard attrs with generated ones (from column names).
         return sorted(standard + [str(k) for k in self.keys()])
 
-    def get(self, key, default=None):
+    def get(self, key: str, default: Any = None) -> Any:
         """Returns the value for a given key, or default."""
         try:
             return self[key]
         except KeyError:
             return default
 
-    def as_dict(self):
+    def as_dict(self) -> Dict[str, Any]:
         """Returns the row as a dictionary, as ordered."""
-        items = zip(self.keys(), self.values())
+        return dict(self._dict)
 
-        return dict(items)
-
-    def as_tuple(self):
+    def as_tuple(self) -> Tuple[Any, ...]:
         return tuple(self.values())
 
-    def as_list(self):
+    def as_list(self) -> List[Any]:
         return list(self.values())
 
-    def as_json(self, **kwargs):
+    def as_json(self, **kwargs: Any) -> str:
         return json.dumps(self.as_dict(), cls=json_handler, **kwargs)
-        # return json.dumps(self.as_dict(), indent=4, sort_keys=True, default=str)
 
-    def as_model(self, model):
-        """return the row as pydantic model"""
+    def as_model(self, model: Type[Any]) -> Any:
+        """Return the row as a pydantic model."""
         if inspect.isclass(model):
-            # return model.parse_obj(self.as_dict())
             return model(**self.as_dict())
         else:
-            raise ValueError("as_model excepts a class as input")
+            raise ValueError("as_model expects a class as input")

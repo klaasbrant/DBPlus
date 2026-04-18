@@ -35,7 +35,7 @@ _BAD_PREFIX = re.compile(r"^\d")
 _SQL_COMMENT = re.compile(r"\s*--\s*(.*)$")
 
 
-class QueryStore(object):
+class QueryStore:
     def __init__(
         self,
         sql_path: Union[str, Path],

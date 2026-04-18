@@ -60,25 +60,25 @@ class DBDriver(BaseDriver):
     def error_info(self):
         return self._error
 
-    def execute(self, Statement, sql, *params):
+    def execute(self, statement, sql, *params):
         try:
             self._error = None
-            Statement._cursor = self._conn.cursor()
-            Statement._cursor.execute(sql, params)
-            self._last_cursor = Statement._cursor
-            return Statement._cursor.rowcount
+            statement._cursor = self._conn.cursor()
+            statement._cursor.execute(sql, params)
+            self._last_cursor = statement._cursor
+            return statement._cursor.rowcount
         except mysql.connector.Error as err:
             self._error = str(err)
             self._logger.error("Error executing SQL: %s", err)
             raise err
 
-    def execute_many(self, Statement, sql, params):
+    def execute_many(self, statement, sql, params):
         try:
             self._error = None
-            Statement._cursor = self._conn.cursor()
-            Statement._cursor.executemany(sql, params)
-            self._last_cursor = Statement._cursor
-            return Statement._cursor.rowcount
+            statement._cursor = self._conn.cursor()
+            statement._cursor.executemany(sql, params)
+            self._last_cursor = statement._cursor
+            return statement._cursor.rowcount
         except mysql.connector.Error as err:
             self._error = str(err)
             self._logger.error("Error executing SQL: %s", err)
@@ -88,25 +88,14 @@ class DBDriver(BaseDriver):
                 )
             )
 
-    def iterate(self, Statement):
-        if Statement._cursor is None:
+    def iterate(self, statement):
+        if statement._cursor is None:
             raise StopIteration
-        row = self._next_row(Statement)
+        row = self._next_row(statement)
         while row:
             yield row
-            row = self._next_row(Statement)
-        Statement._cursor = None
-
-    def _next_row(self, Statement):
-        columns = [desc[0] for desc in Statement._cursor.description]
-        row = Statement._cursor.fetchone()
-        if row is None:
-            return row
-        else:
-            row = tuple(
-                [el.decode("utf-8") if type(el) is bytearray else el for el in row]
-            )
-            return dict(zip(columns, row))
+            row = self._next_row(statement)
+        statement._cursor = None
 
     def row_count(self):
         if self._last_cursor is not None:

@@ -1,10 +1,8 @@
-from __future__ import absolute_import, division, print_function, with_statement
-
 import logging
 
 import oracledb as ora
 
-from dbplus.Database import DBError
+from dbplus.errors import DBError
 from dbplus.drivers import BaseDriver
 
 # import cx_Oracle as ora
@@ -63,38 +61,27 @@ class DBDriver(BaseDriver):
                 )
             ) from None
 
-    def execute(self, Statement, sql, **kwargs):
+    def execute(self, statement, sql, **kwargs):
         self._logger.info("Oracle execute sql: {} params {}".format(sql, kwargs))
         try:
-            Statement._cursor = self._conn.cursor()
-            Statement._cursor.execute(sql, kwargs)
-            return Statement._cursor.rowcount
+            statement._cursor = self._conn.cursor()
+            statement._cursor.execute(sql, kwargs)
+            return statement._cursor.rowcount
         except Exception as ex:
             raise DBError(
                 f"Error executing SQL: {sql}, with parameters: {kwargs}\n{str(ex)}"
             ) from None
 
-    def iterate(self, Statement):
-        if Statement._cursor is None:
+    def iterate(self, statement):
+        if statement._cursor is None:
             raise StopIteration
-        row = self._next_row(Statement)
+        row = self._next_row(statement)
         while row:
             self._logger.info("Oracle next row: {} ".format(row))
             yield row
-            row = self._next_row(Statement)
+            row = self._next_row(statement)
         self._logger.info("Oracle no next row")
-        Statement._cursor = None
-
-    def _next_row(self, Statement):
-        columns = [desc[0] for desc in Statement._cursor.description]
-        row = Statement._cursor.fetchone()
-        if row is None:
-            return row
-        else:
-            row = tuple(
-                [el.decode("utf-8") if type(el) is bytearray else el for el in row]
-            )
-            return dict(zip(columns, row))
+        statement._cursor = None
 
     def clear(self):
         if self._cursor is not None:
@@ -128,17 +115,17 @@ class DBDriver(BaseDriver):
     def get_name(self):
         return "oracle"
 
-    def execute_many(self, Statement, sql, params):
+    def execute_many(self, statement, sql, params):
         try:
-            Statement._cursor = self._conn.cursor()
-            Statement._cursor.executemany(sql, params)
-            return Statement._cursor.rowcount
+            statement._cursor = self._conn.cursor()
+            statement._cursor.executemany(sql, params)
+            return statement._cursor.rowcount
         except Exception as ex:
             raise DBError(
                 f"Error executing SQL: {sql}, with parameters: {params}\n{str(ex)}"
             ) from None
 
-    def describe_cursor(self, stmt):
-        if stmt._cursor and stmt._cursor.description:
-            return stmt._cursor.description
+    def describe_cursor(self, cursor):
+        if cursor and cursor.description:
+            return cursor.description
         return None

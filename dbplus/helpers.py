@@ -2,20 +2,8 @@ import datetime
 import decimal
 import json
 import logging
-import sys
+import re
 import time
-from inspect import isclass
-
-
-def isexception(obj):
-    """Given an object, return a boolean indicating whether it is an instance
-    or subclass of :py:class:`Exception`.
-    """
-    if isinstance(obj, Exception):
-        return True
-    if isclass(obj) and issubclass(obj, Exception):
-        return True
-    return False
 
 
 def guess_type(x):
@@ -34,29 +22,6 @@ def guess_type(x):
     return x  # not a string, number or date? Just return input
 
 
-def fix_sql_type(x, null):
-    return None if x == null else x
-
-
-def is_number(s):
-    try:
-        float(s)
-        return True
-    except ValueError:
-        return False
-
-
-def _reduce_datetimes(row):
-    """Receives a row, converts datetimes to strings."""
-
-    row = list(row)
-
-    for i in range(len(row)):
-        if hasattr(row[i], "isoformat"):
-            row[i] = row[i].isoformat()
-    return tuple(row)
-
-
 class json_handler(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, decimal.Decimal):
@@ -66,7 +31,6 @@ class json_handler(json.JSONEncoder):
         else:
             return super().default(obj)
 
-    # return obj.isoformat() if hasattr(obj, 'isoformat') else obj
 
 
 # Parsing code is simplified version from SQLAlchemy
@@ -74,7 +38,6 @@ class json_handler(json.JSONEncoder):
 
 def _validate_identifier(name):
     """Validate a SQL identifier (table/column name) to prevent injection."""
-    import re
     if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_.]*$', name):
         raise ValueError(f"Invalid SQL identifier: {name!r}")
 
@@ -82,7 +45,6 @@ def _validate_identifier(name):
 def _parse_database_url(name):
     if name is None:
         return None
-    import re
 
     pattern = re.compile(
         r"""

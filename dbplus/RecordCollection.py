@@ -1,30 +1,30 @@
+from __future__ import annotations
+
 import inspect
 import logging
+from typing import Any, Dict, Generator, Iterator, List, Optional, Tuple, Type, Union
 
 from dbplus.helpers import _debug
 from dbplus.Record import Record
 from dbplus.Statement import Statement
 
 
-class RecordCollection(object):
+class RecordCollection:
     """A set of excellent rows from a query."""
 
-    def __init__(self, rows, stmt):
+    def __init__(self, rows: Generator[Record, None, None], stmt: Optional[Statement]) -> None:
         self._rows = rows
-        self._all_rows = []
-        self.pending = True
+        self._all_rows: List[Record] = []
+        self.pending: bool = True
         self._stmt = stmt
         self._logger = logging.getLogger("RecordCollection")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<RecordCollection size={} pending={}>".format(len(self), self.pending)
 
-    def __str__(self):
-        return self.__unicode__()
-
     @_debug()
-    def __unicode__(self):
-        result = []
+    def __str__(self) -> str:
+        result: List[List[str]] = []
         data = self.all(as_tuple=True)
         if len(self) > 0:
             headers = self[0].as_dict()
@@ -38,7 +38,7 @@ class RecordCollection(object):
         else:
             return "\n"  # empty set, nothing to report
 
-    def __iter__(self):
+    def __iter__(self) -> Generator[Record, None, None]:
         """Iterate over all rows, consuming the underlying generator
         only when necessary."""
         i = 0
@@ -56,22 +56,19 @@ class RecordCollection(object):
                     return
             i += 1
 
-    def next(self):
+    def next(self) -> Record:
         return self.__next__()
 
-    def __next__(self):
+    def __next__(self) -> Record:
         try:
-            # self._logger.debug("===== in next ====")
             nextrow = next(self._rows)
-            # self._logger.debug("======= out next: row ===>",nextrow)
             self._all_rows.append(nextrow)
             return nextrow
         except StopIteration:
             self.pending = False
-            # self._logger.debug("==== EOF ===")
             raise StopIteration("RecordCollection contains no more rows.")
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: Union[int, slice]) -> Union[Record, RecordCollection]:
         """
         Argument: index or slice
         """
@@ -89,7 +86,7 @@ class RecordCollection(object):
                 raise TypeError("Invalid argument type")
 
         # do we need to fetch extra to complete ?
-        if self.pending == True:
+        if self.pending:
             if start < 0 or stop is None:  # we must fetch all to evaluate
                 fetcher = -1  # get it all
             else:
@@ -109,18 +106,14 @@ class RecordCollection(object):
                 raise IndexError("Recordcollection index out of range")
             return self._all_rows[key]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._all_rows)
 
-    def __del__(self):
-        pass
-        # self.close()
-
-    def close(self):
+    def close(self) -> None:
         if self._stmt:
             self._stmt.close()
 
-    def next_result(self, fetchall=False):
+    def next_result(self, fetchall: bool = False) -> Optional[RecordCollection]:
         self._logger.info(f"Resolving next_result {self._stmt}")
         if self._stmt is None:
             raise RuntimeError("Cannot call next_result: no active statement")
@@ -137,10 +130,7 @@ class RecordCollection(object):
                 results.all()
             return results
 
-    def export(self, format, **kwargs):
-        pass
-
-    def as_DataFrame(self):
+    def as_DataFrame(self) -> Any:
         """A DataFrame representation of the RecordCollection."""
         try:
             from pandas import DataFrame
@@ -150,7 +140,12 @@ class RecordCollection(object):
             )
         return DataFrame(data=self.all(as_dict=True))
 
-    def all(self, as_dict=False, as_tuple=False, as_json=False):
+    def all(
+        self,
+        as_dict: bool = False,
+        as_tuple: bool = False,
+        as_json: bool = False,
+    ) -> Union[List[Record], List[Dict[str, Any]], List[Tuple[Any, ...]], List[str]]:
         """Returns a list of all rows for the RecordCollection. If they haven't
         been fetched yet, consume the iterator and cache the results."""
 
@@ -168,40 +163,40 @@ class RecordCollection(object):
 
         return rows  # list of records
 
-    def as_model(self, model):
-        """return an array of pydantic models"""
+    def as_model(self, model: Type[Any]) -> List[Any]:
+        """Return an array of pydantic models."""
         if inspect.isclass(model):
             rows = list(self)
             return [r.as_model(model) for r in rows]
         else:
-            raise ValueError("as_model excepts a class as input")
+            raise ValueError("as_model expects a class as input")
 
-    def as_dict(self):
+    def as_dict(self) -> List[Dict[str, Any]]:
         return self.all(as_dict=True)
 
-    def as_tuple(self):
+    def as_tuple(self) -> List[Tuple[Any, ...]]:
         return self.all(as_tuple=True)
 
-    def as_json(self):
+    def as_json(self) -> List[str]:
         return self.all(as_json=True)
 
-    def one(self, default=None):
+    def one(self, default: Optional[Record] = None) -> Optional[Record]:
         """Returns a single record from the RecordCollection, ensuring there is data else returns `default`."""
         # Try to get a record, or return default.
         try:
             return self[0]
-        except Exception:
+        except (IndexError, StopIteration):
             return default
 
-    def scalar(self, default=None):
+    def scalar(self, default: Any = None) -> Any:
         """Returns the first column of the first row, or `default`."""
         try:
             return self[0][0]
-        except Exception:
+        except (IndexError, StopIteration):
             return default
         finally:
             self.close()
 
     @property
-    def description(self):
+    def description(self) -> Any:
         return self._stmt.description()
