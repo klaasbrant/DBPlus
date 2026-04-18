@@ -7,8 +7,8 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
 setup(
-    name="DBPlus",
-    version="0.4.7",
+    name="dbplus",
+    version="0.5.0",
     description="Database-agnostic SQL Interface for Postresql, MySQL, SQLite, DB2 and more",
     url="https://github.com/klaasbrant/DBPlus",
     author="Klaas Brant",

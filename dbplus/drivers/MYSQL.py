@@ -144,9 +144,9 @@ class DBDriver(BaseDriver):
             self._logger.error("Error calling stored proc %s: %s", procname, err)
             raise err
 
-    def describe_cursor(self, stmt):
-        if stmt._cursor and stmt._cursor.description:
-            return stmt._cursor.description
+    def describe_cursor(self, cursor):
+        if cursor and cursor.description:
+            return cursor.description
         return None
 
     def next_result(self, cursor):

@@ -117,9 +117,7 @@ class RecordCollection(object):
         # self.close()
 
     def close(self):
-        if (
-            self._stmt and self.pending
-        ):  # if we have a cursor and cursor is not yet auto closed
+        if self._stmt:
             self._stmt.close()
 
     def next_result(self, fetchall=False):

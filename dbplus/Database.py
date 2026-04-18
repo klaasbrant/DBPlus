@@ -72,7 +72,9 @@ class Database(object):
         self.close()
 
     def __repr__(self):
-        return f"<DBPlus {self.db_driver} database url: {self.db_url}), state: connected={self.is_connected()}>"
+        import re
+        safe_url = re.sub(r'://([^:]*):([^@]*)@', r'://\1:***@', self.db_url) if self.db_url else None
+        return f"<DBPlus {self.db_driver} database url: {safe_url}), state: connected={self.is_connected()}>"
 
     ################# Experimental feature, driver might offer extra options ############################
     def __getattr__(self, name):
@@ -117,7 +119,7 @@ class Database(object):
     #########################################################################################################################
 
     def execute(self, sql, *args, **kwargs):
-        self._logger.info(f"--> Execute: {sql} with arguments [{str(args)}]")
+        self._logger.debug(f"--> Execute: {sql} with arguments [{str(args)}]")
         self.ensure_connected()
         modified = Statement(self).execute(
             sql, *args, **kwargs
@@ -242,10 +244,11 @@ class Database(object):
         cursor.execute(sql_query)
         row_count = 0
         mode = "a" if append else "w"
+        writer = None
         with open(file, mode) as csvfile:
             for row in cursor:
                 row_count += 1
-                if row_count == 1:
+                if writer is None:
                     csv_columns = row.keys()
                     writer = csv.DictWriter(
                         csvfile,
@@ -264,6 +267,18 @@ class Database(object):
                     if row_copy[key] is None:
                         row_copy[key] = null
                 writer.writerow(row_copy)
+
+            if writer is None and header and columns is not None:
+                writer = csv.DictWriter(
+                    csvfile,
+                    fieldnames=columns,
+                    lineterminator=recsep,
+                    restval="",
+                    delimiter=sep,
+                    quoting=csv.QUOTE_MINIMAL,
+                    **kwargs,
+                )
+                writer.writeheader()
         return row_count
 
     def copy_from(
@@ -310,10 +325,19 @@ class Database(object):
 
     def _insert_values(self, table, col, queue):
         _validate_identifier(table)
-        values_literal = "({})".format(
-            ",".join([self.get_driver().get_placeholder()] * len(queue[0]))
-        )
+        placeholder = self.get_driver().get_placeholder()
+        ncols = len(queue[0])
+        if placeholder == ":":
+            # Oracle uses numbered bind variables (:1, :2, ...)
+            values_literal = "({})".format(
+                ",".join(f":{i+1}" for i in range(ncols))
+            )
+        else:
+            values_literal = "({})".format(
+                ",".join([placeholder] * ncols)
+            )
         sql_query = "insert into {} {} values {}".format(table, col, values_literal)
-        self.get_driver().execute_many(self, sql_query, queue)
+        stmt = Statement(self)
+        self.get_driver().execute_many(stmt, sql_query, queue)
 
     #########################################################################################################################

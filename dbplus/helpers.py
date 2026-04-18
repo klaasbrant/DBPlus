@@ -1,4 +1,3 @@
-import ast
 import datetime
 import decimal
 import json
@@ -22,7 +21,6 @@ def isexception(obj):
 def guess_type(x):
     # This function guesses the input and returns that type
     attempt_fns = [
-        ast.literal_eval,
         lambda x: datetime.datetime.strptime(x, "%Y-%m-%d"),
         lambda x: datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S"),
         int,

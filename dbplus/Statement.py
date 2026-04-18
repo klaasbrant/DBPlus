@@ -27,7 +27,11 @@ class Statement:
 
     def close(self):
         if self._cursor is not None:
-            self._connection.get_driver().clear(self)
+            try:
+                self._cursor.close()
+            except Exception:
+                pass
+            self._cursor = None
 
     def iterate(self):
         # Driver iterate will return a row as dict
@@ -37,7 +41,7 @@ class Statement:
     def execute(self, sql, *args, **kwargs):
         if isinstance(sql, Query):
             sql = sql.sql
-        self._logger.info(f"--> Execute : {sql} :: {args=}, {kwargs=}")
+        self._logger.debug(f"--> Execute : {sql} :: {args=}, {kwargs=}")
 
         if self._connection.get_driver().get_placeholder() == ":":
             return self._connection.get_driver().execute(self, sql, **kwargs)
