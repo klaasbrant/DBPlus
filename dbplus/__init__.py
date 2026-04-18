@@ -5,5 +5,5 @@ from dbplus.QueryStore import QueryStore
 __all__ = ["Database", "DBError", "QueryStore"]
 
 # bootstrap here
-version = "0.6.1"
-version_info = (0, 6, 1)
+version = "0.7.0"
+version_info = (0, 7, 0)

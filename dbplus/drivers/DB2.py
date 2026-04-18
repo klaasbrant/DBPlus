@@ -21,8 +21,8 @@ if os.name == "nt":
 
 import ibm_db
 
-from dbplus.errors import DBError
 from dbplus.drivers import BaseDriver
+from dbplus.errors import DBError
 from dbplus.helpers import _debug
 from dbplus.Record import Record
 from dbplus.RecordCollection import RecordCollection
@@ -77,7 +77,10 @@ class DBDriver(BaseDriver):
             ibm_db.SQL_ATTR_AUTOCOMMIT: ibm_db.SQL_AUTOCOMMIT_ON,
         }
         import re
-        masked_conn = re.sub(r'(UID=|PWD=)[^;]*', r'\1***', self._conn_string, flags=re.IGNORECASE)
+
+        masked_conn = re.sub(
+            r"(UID=|PWD=)[^;]*", r"\1***", self._conn_string, flags=re.IGNORECASE
+        )
         self._logger.info("--> PCONNECT {} - {}".format(masked_conn, options))
         try:
             self._conn = ibm_db.pconnect(self._conn_string, "", "", options)
