@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import NamedTuple, Optional, Sequence, Tuple, Union
+from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 
 class Query(NamedTuple):
@@ -34,6 +34,46 @@ _BAD_PREFIX = re.compile(r"^\d")
 # get SQL comment contents
 _SQL_COMMENT = re.compile(r"\s*--\s*(.*)$")
 
+# column-1 "-- version: <spec>" line; spaces/tabs only; captures spec sans trailing ws
+_VERSION_LINE = re.compile(r"^--[ \t]+version[ \t]*:[ \t]*(\S.*?)[ \t]*$")
+
+# version-spec operators, ordered longest-first so ">=" binds before ">"
+_VERSION_OPS = (">=", "<=", "==", "!=", ">", "<")
+
+
+def _parse_version(v: str) -> Tuple[int, ...]:
+    try:
+        return tuple(int(p) for p in v.strip().split("."))
+    except ValueError:
+        raise SQLParseException(f"invalid version: {v!r}")
+
+
+def _parse_version_spec(spec: str) -> Tuple[str, Tuple[int, ...]]:
+    s = spec.strip()
+    for op in _VERSION_OPS:
+        if s.startswith(op):
+            return op, _parse_version(s[len(op):])
+    return "==", _parse_version(s)
+
+
+def _compare_versions(lhs: Tuple[int, ...], op: str, rhs: Tuple[int, ...]) -> bool:
+    n = max(len(lhs), len(rhs))
+    lhs = lhs + (0,) * (n - len(lhs))
+    rhs = rhs + (0,) * (n - len(rhs))
+    if op == "==":
+        return lhs == rhs
+    if op == "!=":
+        return lhs != rhs
+    if op == ">=":
+        return lhs >= rhs
+    if op == "<=":
+        return lhs <= rhs
+    if op == ">":
+        return lhs > rhs
+    if op == "<":
+        return lhs < rhs
+    raise SQLParseException(f"invalid version operator: {op!r}")
+
 
 class QueryStore:
     def __init__(
@@ -41,8 +81,12 @@ class QueryStore:
         sql_path: Union[str, Path],
         ext: Tuple[str] = (".sql",),
         prefix: Optional[bool] = False,
+        version: Optional[str] = None,
     ):
-        self.query_store = {}
+        self.query_store: Dict[str, Query] = {}
+        self._candidates: Dict[str, List[Tuple[Optional[str], Query]]] = {}
+        self._version_str = version
+        self._version = _parse_version(version) if version is not None else None
         path = Path(sql_path)
         if not path.exists():
             raise SQLLoadException(f"File/Path does not exist: {path}")
@@ -54,6 +98,7 @@ class QueryStore:
             raise SQLLoadException(
                 f"{sql_path} is not valid for QueryStore, expecting file or path"
             )
+        self._resolve_candidates()
 
     def __getattr__(self, name):
         try:
@@ -63,13 +108,31 @@ class QueryStore:
 
     def _make_query(
         self, query: str, floc: Optional[Tuple[Path, int]] = None, prefix: bool = False
-    ) -> Query:
-        lines = [line.strip() for line in query.strip().splitlines()]
-        qname = self._get_name_op(lines[0])
+    ) -> Tuple[Optional[str], Query]:
+        raw = query.strip().splitlines()
+        stripped = [line.strip() for line in raw]
+        qname = self._get_name_op(stripped[0])
         if prefix:
             qname = floc[0].stem + "_" + qname
-        sql, doc = self._get_sql_doc(lines[1:])
-        return Query(qname, doc, sql, floc)
+
+        version_spec: Optional[str] = None
+        consumed = {0}
+        for i in range(1, len(raw)):
+            if not stripped[i].startswith("--"):
+                break
+            m = _VERSION_LINE.match(raw[i])
+            if m:
+                if version_spec is not None:
+                    raise SQLParseException(
+                        f"multiple -- version: lines for query {qname!r} in {floc}"
+                    )
+                version_spec = m.group(1).strip()
+                _parse_version_spec(version_spec)
+                consumed.add(i)
+
+        remaining = [stripped[i] for i in range(len(stripped)) if i not in consumed]
+        sql, doc = self._get_sql_doc(remaining)
+        return version_spec, Query(qname, doc, sql, floc)
 
     def _get_name_op(self, text: str) -> str:
         qname_spec = text.replace("-", "_")
@@ -92,20 +155,39 @@ class QueryStore:
 
         return sql.strip(), doc.rstrip()
 
-    def _update_query_tree(self, item: Query):
-        if item.name not in self.query_store:
-            self.query_store[item.name] = item
-        else:
-            raise SQLLoadException(
-                f"duplicate {item.name} in {item.floc}, conflict with {self.query_store[item.name].floc} "
-            )
+    def _update_query_tree(self, version_spec: Optional[str], item: Query):
+        candidates = self._candidates.setdefault(item.name, [])
+        for existing_spec, existing_item in candidates:
+            if existing_spec == version_spec:
+                vlabel = (
+                    f"version {version_spec!r}" if version_spec else "no version"
+                )
+                raise SQLLoadException(
+                    f"duplicate {item.name} ({vlabel}) in {item.floc}, "
+                    f"conflict with {existing_item.floc}"
+                )
+        candidates.append((version_spec, item))
+
+    def _resolve_candidates(self):
+        for name, cands in self._candidates.items():
+            for spec, item in cands:
+                if spec is None:
+                    self.query_store[name] = item
+                    break
+                if self._version is None:
+                    continue
+                op, rhs = _parse_version_spec(spec)
+                if _compare_versions(self._version, op, rhs):
+                    self.query_store[name] = item
+                    break
 
     def load_query_data_from_file(self, fname: Path, prefix: bool = False):
         qdefs = _QUERY_DEF.split(fname.read_text())
         lineno = 1 + qdefs[0].count("\n")
         # first item is anything before the first query definition, drop it!
         for qdef in qdefs[1:]:
-            self._update_query_tree(self._make_query(qdef, (fname, lineno), prefix))
+            version_spec, item = self._make_query(qdef, (fname, lineno), prefix)
+            self._update_query_tree(version_spec, item)
             lineno += qdef.count("\n")
 
     def load_query_data_from_dir_path(self, dir_path, ext=(".sql",), prefix=True):

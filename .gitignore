@@ -6,6 +6,13 @@ __pycache__/
 # C extensions
 *.so
 
+# Markdown AI chats
+*.md
+
+# except for
+!README.md
+!docs/*.md
+
 # Distribution / packaging
 .Python
 build/

@@ -87,6 +87,69 @@ rows = db.query(Q.get_employee_by_id, empno='000010')
 
 The attribute returns a `Query` named tuple that can be passed directly to `db.query()` or `db.execute()`.
 
+## Versioned Queries
+
+Databases evolve. A query that runs on one server version may not work — or may perform differently — on another. `QueryStore` lets you ship multiple variants of the same logical query and have the right one picked automatically based on a version you supply at construction time.
+
+Declare a version for the store, and optionally tag each query variant with a version specifier using a `-- version:` line:
+
+```sql
+-- name: row-count
+-- version: >=11.5.0
+SELECT COUNT(*) FROM SYSIBMADM.MON_CURRENT_SQL
+
+-- name: row-count
+-- Fallback for older servers or when no specifier matches
+SELECT COUNT(*) FROM sysibm.sysdummy1
+```
+
+```python
+Q = QueryStore("queries.sql", version="11.5.6")
+db.query(Q.row_count)      # resolves to the >=11.5.0 variant
+```
+
+### Supported operators
+
+Specifiers follow the same style as `pip install`:
+
+| Operator | Meaning                  |
+|----------|--------------------------|
+| `==`     | equal (also the default) |
+| `!=`     | not equal                |
+| `>=`     | greater than or equal    |
+| `<=`     | less than or equal       |
+| `>`      | greater than             |
+| `<`      | less than                |
+
+If no operator is given, `==` is assumed: `-- version: 11.5.6` is equivalent to `-- version: ==11.5.6`.
+
+Versions are dotted integers of any length. Shorter versions are right-padded with zeros before comparison, so `1.0` compares equal to `1.0.0`.
+
+### Resolution rules
+
+For each query name, candidates are walked in file-order and the **first match wins**:
+
+1. A candidate with **no** `-- version:` line always matches.
+2. A candidate with a specifier matches if the configured `version=` value satisfies it.
+3. If `version=` is not passed to `QueryStore`, only unversioned candidates are considered.
+4. If no candidate matches, the name is absent from the store and attribute access raises `AttributeError`.
+
+Because unversioned queries always match, place them **last** if you want specifier-tagged variants to have a chance to win. Anything after an unversioned candidate for the same name is unreachable.
+
+### Syntax and whitespace
+
+- The `-- version:` line may appear anywhere in the preamble comment block — before the first SQL line and in any order relative to other doc comments.
+- `--` must start at **column 1** (no leading whitespace). An indented `-- version:` line is treated as an ordinary SQL comment.
+- Whitespace between `--`, `version`, `:` and the specifier may be any combination of spaces or tabs.
+
+### Error cases
+
+| Condition                                                         | Exception            |
+|-------------------------------------------------------------------|----------------------|
+| Two candidates with the same name and the same specifier (including both unversioned) | `SQLLoadException`   |
+| More than one `-- version:` line in a single query block          | `SQLParseException`  |
+| Unparseable version specifier in either the file or the `version=` argument | `SQLParseException` |
+
 ## The Query Object
 
 Each loaded query is a `Query` named tuple with these fields:
@@ -131,8 +194,8 @@ Q = QueryStore('path/to/sql/')
 
 | Exception           | Description                                      |
 |---------------------|--------------------------------------------------|
-| `SQLLoadException`  | File/directory not found, or duplicate query name |
-| `SQLParseException` | Invalid query name format                         |
+| `SQLLoadException`  | File/directory not found, or duplicate (name, version) pair |
+| `SQLParseException` | Invalid query name, invalid version specifier, or multiple `-- version:` lines |
 
 Query names must start with a letter or underscore (not a digit) and contain only word characters.
 
