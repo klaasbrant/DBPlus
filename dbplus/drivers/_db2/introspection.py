@@ -283,11 +283,14 @@ class DB2IntrospectionMixin:
 
         try:
             stmt = ibm_db.prepare(self._conn, sql)
+            if stmt is False:
+                raise Exception(
+                    ibm_db.stmt_errormsg() or ibm_db.conn_errormsg(self._conn) or "PREPARE failed"
+                )
+            # DB2 defers some validation (object resolution) to num_fields.
+            ibm_db.num_fields(stmt)
         except Exception as exc:
-            return QueryValidation(valid=False, error=str(exc))
-        if stmt is False:
-            error = ibm_db.stmt_errormsg() or ibm_db.conn_errormsg(self._conn) or "PREPARE failed"
-            return QueryValidation(valid=False, error=error.strip())
+            return QueryValidation(valid=False, error=str(exc).strip())
         return QueryValidation(valid=True)
 
     def describe_query(self, sql: str) -> List[ColumnInfo]:
@@ -295,11 +298,13 @@ class DB2IntrospectionMixin:
 
         try:
             stmt = ibm_db.prepare(self._conn, sql)
+            if stmt is False:
+                raise DBError(ibm_db.stmt_errormsg() or "PREPARE failed")
+            num_cols = ibm_db.num_fields(stmt)
+        except DBError:
+            raise
         except Exception as exc:
             raise DBError(str(exc)) from exc
-        if stmt is False:
-            raise DBError(ibm_db.stmt_errormsg() or "PREPARE failed")
-        num_cols = ibm_db.num_fields(stmt)
         columns = []
         for i in range(num_cols):
             columns.append(

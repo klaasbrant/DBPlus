@@ -370,7 +370,8 @@ class TestSampleRows:
         db, schema = db2
         rows = db.sample_rows(schema, "DBPLUS_EMP")
         assert all(isinstance(r, dict) for r in rows)
-        assert "EMP_ID" in rows[0]
+        # ibm_db.fetch_assoc() returns lowercase keys for unaliased SELECT *
+        assert "emp_id" in rows[0]
 
     def test_invalid_identifier_rejected(self, db2):
         db, schema = db2
