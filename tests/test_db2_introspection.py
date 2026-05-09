@@ -17,8 +17,10 @@ from dbplus.drivers.introspection import (
     ForeignKeyInfo,
     IndexInfo,
     Introspector,
+    QueryValidation,
     RoutineInfo,
     SchemaInfo,
+    SearchResult,
     ServerInfo,
     StatsInfo,
     TableDetail,
@@ -325,3 +327,145 @@ class TestServerInfo:
         assert info.product  # "DB2/LINUXX8664" or similar
         assert info.version  # "DB2 v11.5.x" or similar
         assert isinstance(info.raw, dict)
+
+
+class TestListTableStats:
+    def test_returns_list_of_stats(self, db2):
+        db, schema = db2
+        stats = db.list_table_stats(schema)
+        assert isinstance(stats, list)
+        assert all(isinstance(s, StatsInfo) for s in stats)
+
+    def test_includes_test_tables(self, db2):
+        db, schema = db2
+        stats = db.list_table_stats(schema)
+        names = {s.name for s in stats}
+        assert "DBPLUS_EMP" in names
+        assert "DBPLUS_DEPT" in names
+
+    def test_no_views_included(self, db2):
+        db, schema = db2
+        stats = db.list_table_stats(schema)
+        names = {s.name for s in stats}
+        assert "DBPLUS_EMP_V" not in names
+
+    def test_unknown_schema_returns_empty(self, db2):
+        db, _ = db2
+        assert db.list_table_stats("NOSUCH_SCHEMA_XYZ") == []
+
+
+class TestSampleRows:
+    def test_returns_rows(self, db2):
+        db, schema = db2
+        rows = db.sample_rows(schema, "DBPLUS_EMP")
+        assert isinstance(rows, list)
+        assert len(rows) >= 1
+
+    def test_respects_n_limit(self, db2):
+        db, schema = db2
+        rows = db.sample_rows(schema, "DBPLUS_EMP", n=1)
+        assert len(rows) == 1
+
+    def test_rows_are_dicts(self, db2):
+        db, schema = db2
+        rows = db.sample_rows(schema, "DBPLUS_EMP")
+        assert all(isinstance(r, dict) for r in rows)
+        assert "EMP_ID" in rows[0]
+
+    def test_invalid_identifier_rejected(self, db2):
+        db, schema = db2
+        with pytest.raises(Exception):
+            db.sample_rows(schema, "t; DROP TABLE users")
+
+
+class TestValidateQuery:
+    def test_valid_select_returns_true(self, db2):
+        db, _ = db2
+        result = db.validate_query("SELECT 1 FROM SYSIBM.SYSDUMMY1")
+        assert isinstance(result, QueryValidation)
+        assert result.valid is True
+        assert result.error is None
+
+    def test_syntax_error_returns_false(self, db2):
+        db, _ = db2
+        result = db.validate_query("SELECT FROM WHERE")
+        assert result.valid is False
+        assert result.error  # non-empty error message
+
+    def test_unknown_table_returns_false(self, db2):
+        db, _ = db2
+        result = db.validate_query("SELECT * FROM NOSUCH_TABLE_XYZ_123")
+        assert result.valid is False
+
+
+class TestDescribeQuery:
+    def test_returns_column_list(self, db2):
+        db, schema = db2
+        cols = db.describe_query(
+            f"SELECT EMP_ID, NAME, SALARY FROM {schema}.DBPLUS_EMP"
+        )
+        assert isinstance(cols, list)
+        assert len(cols) == 3
+        assert all(isinstance(c, ColumnInfo) for c in cols)
+
+    def test_column_names_correct(self, db2):
+        db, schema = db2
+        cols = db.describe_query(
+            f"SELECT EMP_ID, NAME FROM {schema}.DBPLUS_EMP"
+        )
+        assert [c.name for c in cols] == ["EMP_ID", "NAME"]
+
+    def test_ordinals_are_one_based(self, db2):
+        db, schema = db2
+        cols = db.describe_query(
+            f"SELECT EMP_ID, NAME FROM {schema}.DBPLUS_EMP"
+        )
+        assert [c.ordinal for c in cols] == [1, 2]
+
+    def test_invalid_sql_raises(self, db2):
+        db, _ = db2
+        with pytest.raises(DBError):
+            db.describe_query("SELECT * FROM NOSUCH_TABLE_XYZ_123")
+
+
+class TestSearchObjects:
+    def test_search_tables_by_pattern(self, db2):
+        db, schema = db2
+        results = db.search_objects("%DBPLUS%", kinds=["TABLE"])
+        assert isinstance(results, list)
+        assert all(isinstance(r, SearchResult) for r in results)
+        names = {r.name for r in results}
+        assert "DBPLUS_EMP" in names
+        assert "DBPLUS_DEPT" in names
+
+    def test_search_views(self, db2):
+        db, schema = db2
+        results = db.search_objects("%DBPLUS%", kinds=["VIEW"])
+        names = {r.name for r in results}
+        assert "DBPLUS_EMP_V" in names
+        assert all(r.kind == "VIEW" for r in results)
+
+    def test_search_columns(self, db2):
+        db, schema = db2
+        results = db.search_objects("EMP_ID", kinds=["COLUMN"])
+        assert results
+        assert all(r.kind == "COLUMN" for r in results)
+        assert all(r.table is not None for r in results)
+
+    def test_search_all_kinds_by_default(self, db2):
+        db, schema = db2
+        results = db.search_objects("%DBPLUS%")
+        kinds_found = {r.kind for r in results}
+        assert "TABLE" in kinds_found
+        assert "VIEW" in kinds_found
+
+    def test_no_match_returns_empty(self, db2):
+        db, _ = db2
+        results = db.search_objects("%ZZZNOMATCH999%")
+        assert results == []
+
+    def test_case_insensitive_pattern(self, db2):
+        db, schema = db2
+        upper = db.search_objects("%DBPLUS_EMP%", kinds=["TABLE"])
+        lower = db.search_objects("%dbplus_emp%", kinds=["TABLE"])
+        assert {r.name for r in upper} == {r.name for r in lower}

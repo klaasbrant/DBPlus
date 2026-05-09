@@ -269,3 +269,70 @@ WHERE TABNAME = 'LOCK_EVENT'
   AND TYPE    = 'T'
 ORDER BY CREATE_TIME DESC
 FETCH FIRST 1 ROW ONLY
+
+-- ---------------------------------------------------------------------------
+-- Phase 3 additions: bulk stats, search, and query introspection
+-- ---------------------------------------------------------------------------
+
+-- name: list_table_stats
+-- Returns catalog stats for every base table in a schema, ordered by
+-- estimated cardinality descending (biggest tables first).
+SELECT
+    TRIM(t.TABSCHEMA)                          AS schema,
+    TRIM(t.TABNAME)                            AS name,
+    t.CARD                                     AS row_count,
+    BIGINT(t.NPAGES) * BIGINT(ts.PAGESIZE)     AS size_bytes,
+    t.STATS_TIME                               AS last_analyzed
+FROM SYSCAT.TABLES t
+LEFT JOIN SYSCAT.TABLESPACES ts
+  ON ts.TBSPACEID = t.TBSPACEID
+WHERE t.TABSCHEMA = :schema
+  AND t.TYPE      = 'T'
+ORDER BY t.CARD DESC NULLS LAST, t.TABNAME
+
+-- name: search_tables
+SELECT
+    'TABLE'               AS kind,
+    TRIM(TABSCHEMA)       AS schema,
+    TRIM(TABNAME)         AS name,
+    CAST(NULL AS VARCHAR(128)) AS parent_name,
+    REMARKS               AS remarks
+FROM SYSCAT.TABLES
+WHERE UPPER(TABNAME) LIKE UPPER(:pattern)
+  AND TYPE = 'T'
+ORDER BY TABSCHEMA, TABNAME
+
+-- name: search_views
+SELECT
+    'VIEW'                AS kind,
+    TRIM(TABSCHEMA)       AS schema,
+    TRIM(TABNAME)         AS name,
+    CAST(NULL AS VARCHAR(128)) AS parent_name,
+    REMARKS               AS remarks
+FROM SYSCAT.TABLES
+WHERE UPPER(TABNAME) LIKE UPPER(:pattern)
+  AND TYPE = 'V'
+ORDER BY TABSCHEMA, TABNAME
+
+-- name: search_columns
+SELECT
+    'COLUMN'              AS kind,
+    TRIM(TABSCHEMA)       AS schema,
+    TRIM(COLNAME)         AS name,
+    TRIM(TABNAME)         AS parent_name,
+    REMARKS               AS remarks
+FROM SYSCAT.COLUMNS
+WHERE UPPER(COLNAME) LIKE UPPER(:pattern)
+ORDER BY TABSCHEMA, TABNAME, COLNO
+
+-- name: search_procedures
+SELECT
+    'PROCEDURE'           AS kind,
+    TRIM(ROUTINESCHEMA)   AS schema,
+    TRIM(ROUTINENAME)     AS name,
+    CAST(NULL AS VARCHAR(128)) AS parent_name,
+    REMARKS               AS remarks
+FROM SYSCAT.ROUTINES
+WHERE UPPER(ROUTINENAME) LIKE UPPER(:pattern)
+  AND ROUTINETYPE = 'P'
+ORDER BY ROUTINESCHEMA, ROUTINENAME

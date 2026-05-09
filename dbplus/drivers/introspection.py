@@ -124,6 +124,25 @@ class ServerInfo:
     raw: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class QueryValidation:
+    """Result of :meth:`Introspector.validate_query`."""
+
+    valid: bool
+    error: Optional[str] = None
+
+
+@dataclass
+class SearchResult:
+    """One catalog object matching :meth:`Introspector.search_objects`."""
+
+    kind: str              # "TABLE", "VIEW", "COLUMN", "PROCEDURE"
+    schema: str
+    name: str
+    table: Optional[str] = None    # parent table name (COLUMN kind only)
+    remarks: Optional[str] = None
+
+
 @runtime_checkable
 class Introspector(Protocol):
     def list_schemas(self) -> List[SchemaInfo]: ...
@@ -151,5 +170,21 @@ class Introspector(Protocol):
     ) -> List[TriggerInfo]: ...
 
     def get_table_stats(self, schema: str, table: str) -> StatsInfo: ...
+
+    def list_table_stats(self, schema: str) -> List[StatsInfo]: ...
+
+    def sample_rows(
+        self, schema: str, table: str, n: int = 5
+    ) -> List[Dict[str, Any]]: ...
+
+    def validate_query(self, sql: str) -> QueryValidation: ...
+
+    def describe_query(self, sql: str) -> List[ColumnInfo]: ...
+
+    def search_objects(
+        self,
+        pattern: str,
+        kinds: Optional[List[str]] = None,
+    ) -> List[SearchResult]: ...
 
     def server_info(self) -> ServerInfo: ...

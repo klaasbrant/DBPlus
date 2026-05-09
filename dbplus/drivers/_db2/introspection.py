@@ -20,8 +20,10 @@ from dbplus.drivers.introspection import (
     ForeignKeyInfo,
     IndexColumn,
     IndexInfo,
+    QueryValidation,
     RoutineInfo,
     SchemaInfo,
+    SearchResult,
     ServerInfo,
     StatsInfo,
     TableDetail,
@@ -30,6 +32,7 @@ from dbplus.drivers.introspection import (
     ViewInfo,
 )
 from dbplus.errors import DBError
+from dbplus.helpers import _validate_identifier
 from dbplus.Statement import Statement
 
 _TABLE_TYPE_TO_STR = {
@@ -252,6 +255,94 @@ class DB2IntrospectionMixin:
             size_bytes=r["size_bytes"],
             last_analyzed=self._iso(r["last_analyzed"]),
         )
+
+    def list_table_stats(self, schema: str) -> List[StatsInfo]:
+        rows = self._run_query("list_table_stats", schema=schema)
+        return [
+            StatsInfo(
+                schema=r["schema"],
+                name=r["name"],
+                row_count=r["row_count"] if r["row_count"] not in (None, -1) else None,
+                size_bytes=r["size_bytes"],
+                last_analyzed=self._iso(r["last_analyzed"]),
+            )
+            for r in rows
+        ]
+
+    def sample_rows(self, schema: str, table: str, n: int = 5) -> List[Dict[str, Any]]:
+        _validate_identifier(schema)
+        _validate_identifier(table)
+        n = max(1, min(n, 100))
+        sql = f"SELECT * FROM {schema}.{table} FETCH FIRST {n} ROWS ONLY"
+        stmt = Statement(self)
+        stmt.execute(sql)
+        return list(stmt.iterate())
+
+    def validate_query(self, sql: str) -> QueryValidation:
+        import ibm_db
+
+        try:
+            stmt = ibm_db.prepare(self._conn, sql)
+        except Exception as exc:
+            return QueryValidation(valid=False, error=str(exc))
+        if stmt is False:
+            error = ibm_db.stmt_errormsg() or ibm_db.conn_errormsg(self._conn) or "PREPARE failed"
+            return QueryValidation(valid=False, error=error.strip())
+        return QueryValidation(valid=True)
+
+    def describe_query(self, sql: str) -> List[ColumnInfo]:
+        import ibm_db
+
+        try:
+            stmt = ibm_db.prepare(self._conn, sql)
+        except Exception as exc:
+            raise DBError(str(exc)) from exc
+        if stmt is False:
+            raise DBError(ibm_db.stmt_errormsg() or "PREPARE failed")
+        num_cols = ibm_db.num_fields(stmt)
+        columns = []
+        for i in range(num_cols):
+            columns.append(
+                ColumnInfo(
+                    name=ibm_db.field_name(stmt, i),
+                    type=ibm_db.field_type(stmt, i),
+                    nullable=bool(ibm_db.field_nullable(stmt, i)),
+                    ordinal=i + 1,
+                    length=ibm_db.field_width(stmt, i) or None,
+                    scale=ibm_db.field_scale(stmt, i) or None,
+                )
+            )
+        return columns
+
+    def search_objects(
+        self,
+        pattern: str,
+        kinds: Optional[List[str]] = None,
+    ) -> List[SearchResult]:
+        if kinds is None:
+            kinds = ["TABLE", "VIEW", "COLUMN", "PROCEDURE"]
+        _kind_to_query = {
+            "TABLE": "search_tables",
+            "VIEW": "search_views",
+            "COLUMN": "search_columns",
+            "PROCEDURE": "search_procedures",
+        }
+        results: List[SearchResult] = []
+        for kind in kinds:
+            query_name = _kind_to_query.get(kind.upper())
+            if query_name is None:
+                continue
+            for r in self._run_query(query_name, pattern=pattern):
+                results.append(
+                    SearchResult(
+                        kind=r["kind"],
+                        schema=r["schema"],
+                        name=r["name"],
+                        table=r["parent_name"],
+                        remarks=r["remarks"],
+                    )
+                )
+        return results
 
     def server_info(self) -> ServerInfo:
         import ibm_db
