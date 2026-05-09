@@ -1,6 +1,17 @@
+"""DB2 LUW driver.
+
+This module remains the public entry point Python discovers via
+``import_module("dbplus.drivers.DB2")`` when the URL scheme is ``db2://``.
+It defines the concrete :class:`DBDriver` that implements the
+:class:`~dbplus.drivers.BaseDriver` contract on top of ``ibm_db``, and
+composes mixins from :mod:`dbplus.drivers._db2` for introspection, explain,
+etc. Keeping those on separate classes lets the file stay focused on
+connection lifecycle and the core execute/iterate plumbing.
+"""
 import logging
 import os
 import site
+from typing import Any
 
 # The problem is unique to windows see https://github.com/ibmdb/python-ibmdb/issues/887
 if os.name == "nt":
@@ -22,6 +33,9 @@ if os.name == "nt":
 import ibm_db
 
 from dbplus.drivers import BaseDriver
+from dbplus.drivers._db2.explain import DB2ExplainMixin
+from dbplus.drivers._db2.introspection import DB2IntrospectionMixin
+from dbplus.drivers._db2.workload import DB2WorkloadMixin
 from dbplus.errors import DBError
 from dbplus.helpers import _debug
 from dbplus.Record import Record
@@ -29,9 +43,9 @@ from dbplus.RecordCollection import RecordCollection
 from dbplus.Statement import Statement
 
 
-class DBDriver(BaseDriver):
+class DBDriver(DB2ExplainMixin, DB2WorkloadMixin, DB2IntrospectionMixin, BaseDriver):
     @_debug()
-    def __init__(self, **params):
+    def __init__(self, **params: Any) -> None:
         # timeout=5, charset="utf8"
         self._driver = "DB2"
         self._params = params
@@ -159,13 +173,11 @@ class DBDriver(BaseDriver):
         try:
             if statement._cursor is None:
                 raise StopIteration
-            # self._logger.debug(f" >>>>>>>>   About to fetch 1st {statement}")
             row = ibm_db.fetch_assoc(statement._cursor)
             while row:
                 yield row
                 row = ibm_db.fetch_assoc(statement._cursor)
             statement._next = statement._cursor  # save for possible next
-            # ibm_db.free_result(statement._cursor)
             statement._cursor = None
         except Exception as ex:
             self._error = ibm_db.stmt_errormsg()
@@ -175,7 +187,6 @@ class DBDriver(BaseDriver):
 
     @_debug()
     def clear(self):
-        # ibm_db.free_result(statement._cursor)
         if self._cursor is not None:
             self._cursor.close()
             self._cursor = None
@@ -183,7 +194,6 @@ class DBDriver(BaseDriver):
     @_debug()
     def next_result(self, statement):
         try:
-            # self._logger.debug(f"we had a statement {statement}, with _cursor {statement._cursor} and _next {statement._next}")
             nresult = None
             nresult = ibm_db.next_result(statement._next)
             return nresult
