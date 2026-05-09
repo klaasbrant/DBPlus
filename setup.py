@@ -14,10 +14,15 @@ setup(
     author="Klaas Brant",
     author_email="kbrant@kbce.com",
     license="ISC",
-    packages=["dbplus", "dbplus.drivers"],
-    package_data={"dbplus": ["py.typed"]},
+    packages=["dbplus", "dbplus.drivers", "dbplus.drivers._db2"],
+    package_data={
+        "dbplus": ["py.typed"],
+        "dbplus.drivers._db2": ["queries/*.sql"],
+    },
     install_requires=[],
-    extras_require={"dev": ["pytest"]},
+    extras_require={
+        "dev": ["pytest"],
+    },
     zip_safe=False,
     long_description=long_description,
     long_description_content_type="text/markdown",
